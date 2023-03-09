@@ -1,0 +1,47 @@
+[tool.poetry]
+name = "crypt4gh_reencryptor"
+version = "0.1.0"
+description = ""
+authors = ["Sveinung Gundersen <sveinugu@gmail.com>", "Morten Johansen <morj@ifi.uio.no>", "Pável Vázquez <p.v.faci@medisin.uio.no>"]
+readme = "README.md"
+packages = [{include = "crypt4gh_reencryptor", from = "src"}]
+
+
+[tool.poetry.dependencies]
+python = ">=3.8.1,<4.0"
+
+[tool.poetry.group.dev.dependencies]
+yapf = "^0.32.0"
+flake8 = "^6.0.0"
+isort = "^5.10.1"
+flake8-quotes = "^3.3.1"
+mypy = "^0.991"
+toml = "^0.10.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.yapf]
+based_on_style = "google"
+align_closing_bracket_with_visual_indent = true
+blank_line_before_nested_class_or_def = false
+column_limit = 100
+indent_dictionary_value = true
+join_multiple_lines = true
+split_all_comma_separated_values = false
+split_all_top_level_comma_separated_values = true
+split_before_expression_after_opening_paren = true
+split_before_arithmetic_operator = true
+
+[tool.isort]
+profile = "google"
+force_single_line = false
+multi_line_output = 1
+src_paths = ["src/examples", "tests"]
+line_length = 100
+
+[tool.mypy]
+python_version = "3.10"
+mypy_path = "src:tests"
+warn_no_return = false
