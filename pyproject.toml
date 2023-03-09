@@ -9,6 +9,8 @@ packages = [{include = "crypt4gh_reencryptor", from = "src"}]
 
 [tool.poetry.dependencies]
 python = ">=3.8.1,<4.0"
+fastapi = "^0.93.0"
+uvicorn = {extras = ["standard"], version = "^0.20.0"}
 
 [tool.poetry.group.dev.dependencies]
 yapf = "^0.32.0"
