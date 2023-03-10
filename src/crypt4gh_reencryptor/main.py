@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 app = FastAPI()
@@ -18,4 +19,16 @@ async def info():
 
 @app.post("/reencrypt_header")
 async def reencrypt_header(params: ReencryptParams):
-    return [params.encrypted_header, params.reencrypt_public_key]
+    return ['This is from my local laptop', params.encrypted_header, params.reencrypt_public_key]
+
+
+origins = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["POST", "GET"],
+    allow_headers=["*"],
+    max_age=3600,
+)
