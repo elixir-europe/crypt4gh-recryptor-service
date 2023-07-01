@@ -11,6 +11,7 @@ packages = [{include = "crypt4gh_recryptor_server", from = "src"}]
 python = ">=3.8.1,<4.0"
 fastapi = "^0.93.0"
 uvicorn = {extras = ["standard"], version = "^0.20.0"}
+crypt4gh-recryptor = {git = "https://github.com/elixir-europe/GalaxySensitiveData-IS_py-recryptor.git"}
 
 [tool.poetry.group.dev.dependencies]
 yapf = "^0.32.0"
