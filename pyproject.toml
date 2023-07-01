@@ -1,10 +1,10 @@
 [tool.poetry]
-name = "crypt4gh_reencryptor"
+name = "crypt4gh_recryptor_server"
 version = "0.1.0"
 description = ""
 authors = ["Sveinung Gundersen <sveinugu@gmail.com>", "Morten Johansen <morj@ifi.uio.no>", "Pável Vázquez <p.v.faci@medisin.uio.no>"]
 readme = "README.md"
-packages = [{include = "crypt4gh_reencryptor", from = "src"}]
+packages = [{include = "crypt4gh_recryptor_server", from = "src"}]
 
 
 [tool.poetry.dependencies]
