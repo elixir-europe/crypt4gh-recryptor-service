@@ -39,6 +39,7 @@ def _write_orig_header_to_file(crypt4gh_header: str, settings: UserSettings) -> 
     path = Path(settings.headers_dir, filename)
     with open(path, 'wb') as header_file:
         header_file.write(header)
+    path.chmod(mode=0o600)
     return path
 
 
@@ -46,11 +47,13 @@ def _get_temp_header_filename(settings: UserSettings) -> Path:
     return Path(tempfile.mktemp(dir=settings.headers_dir))
 
 
-def _rename_temp_header(temp_header_path: Path) -> Tuple[str, str]:
+def _rename_temp_header(temp_header_path: Path, settings: UserSettings) -> Tuple[str, str]:
     with open(temp_header_path, 'rb') as header_file:
         header = header_file.read()
     new_filename = sha256(header).hexdigest()
-    temp_header_path.rename(new_filename)
+    new_path = Path(settings.headers_dir, new_filename)
+    temp_header_path.rename(new_path)
+    new_path.chmod(mode=0o600)
     return new_filename, b64encode(header).decode('ascii')
 
 
@@ -65,7 +68,7 @@ async def recrypt_header(
                       f'-i {in_header_path} '
                       f'-o {out_header_path} '
                       f'--decryption-key {settings.user_private_key_path}')
-    recrypted_header_path, header = _rename_temp_header(out_header_path)
+    recrypted_header_path, header = _rename_temp_header(out_header_path, settings)
 
     return UserRecryptResponse(
         crypt4gh_header=header,
