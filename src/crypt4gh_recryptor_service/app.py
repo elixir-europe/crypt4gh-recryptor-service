@@ -5,9 +5,9 @@ from fastapi import FastAPI, Depends
 from pydantic import BaseModel, validator, Field
 from starlette.middleware.cors import CORSMiddleware
 
-from .config import get_settings, setup_files
+from .config import get_settings, setup_files, ServerMode
 
-setup_files("user")
+setup_files(ServerMode.USER)
 app = FastAPI()
 
 VERSION = '0.1.0'
