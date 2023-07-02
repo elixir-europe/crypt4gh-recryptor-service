@@ -1,10 +1,13 @@
 from datetime import datetime
-from typing import Union
+from typing import Union, Annotated
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Depends
 from pydantic import BaseModel, validator, Field
+from starlette.middleware.cors import CORSMiddleware
 
+from .config import get_settings, setup_files
+
+setup_files("user")
 app = FastAPI()
 
 VERSION = '0.1.0'
@@ -27,8 +30,8 @@ class RecryptResponse(BaseModel):
 
 
 @app.get("/info")
-async def info():
-    return {'name': 'crypt4gh_reencryptor', 'version': VERSION}
+async def info(settings: Annotated[dict, Depends(get_settings)]) -> dict:
+    return {'name': 'crypt4gh_reencryptor', 'version': VERSION, 'app_name': settings.app_name}
 
 
 @app.post("/recrypt_header")
