@@ -130,3 +130,7 @@ dmypy.json
 
 # PyCharm docs
 .idea
+
+# crypt4gh-recryptor-service
+c4gh_recryptor_compute
+c4gh_recryptor_user
