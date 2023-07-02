@@ -35,18 +35,6 @@ class ServerMode(str, Enum):
     COMPUTE = 'compute'
 
 
-def _get_working_dir(server_mode: ServerMode) -> Path:
-    default_working_dir_attr = f'DEFAULT_WORKING_DIR_{server_mode.value.upper()}'
-    if env_working_dir := dotenv_values().get(default_working_dir_attr):
-        return Path(env_working_dir)
-    else:
-        return Path.cwd().joinpath(Path(globals()[default_working_dir_attr]))
-
-
-def _get_yml_config_file_path(working_dir: Path) -> Path:
-    return Path(working_dir, DEFAULT_YML_CONFIG_FILENAME)
-
-
 class BaseConfig:
     env_file = ENV_FILE
     env_prefix = ENV_PREFIX
@@ -148,6 +136,18 @@ def yml_config_setting(settings: Settings) -> dict[str]:
         if ret:
             return ret
         return {}
+
+
+def _get_working_dir(server_mode: ServerMode) -> Path:
+    default_working_dir_attr = f'DEFAULT_WORKING_DIR_{server_mode.value.upper()}'
+    if env_working_dir := dotenv_values().get(default_working_dir_attr):
+        return Path(env_working_dir)
+    else:
+        return Path.cwd().joinpath(Path(globals()[default_working_dir_attr]))
+
+
+def _get_yml_config_file_path(working_dir: Path) -> Path:
+    return Path(working_dir, DEFAULT_YML_CONFIG_FILENAME)
 
 
 def _ensure_dirs(dir_path: Path):

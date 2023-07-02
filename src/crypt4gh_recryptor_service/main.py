@@ -1,18 +1,10 @@
 from pathlib import Path
-import subprocess
 
 from crypt4gh_recryptor_service.config import get_settings, LOCALHOST, ServerMode, setup_files
+from crypt4gh_recryptor_service.util import run_in_subprocess
 import typer
 
 app = typer.Typer()
-
-
-def run_in_subprocess(cmd: str):
-    print('-' * 26)
-    print(f'Running `{cmd}`:')
-    print('-' * 26)
-    print()
-    subprocess.run(cmd, shell=True, check=True)
 
 
 def _setup_and_run(server_mode: ServerMode):
