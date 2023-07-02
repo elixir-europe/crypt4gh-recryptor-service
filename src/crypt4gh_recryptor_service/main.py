@@ -1,11 +1,11 @@
-import subprocess
 from pathlib import Path
+import subprocess
 
+from crypt4gh_recryptor_service.config import get_settings, LOCALHOST, ServerMode, setup_files
 import typer
 
-from crypt4gh_recryptor_service.config import get_settings, setup_files, ServerMode, LOCALHOST
-
 app = typer.Typer()
+
 
 def run_in_subprocess(cmd: str):
     print('-' * 26)
@@ -22,22 +22,26 @@ def _setup_and_run(server_mode: ServerMode):
     if settings.host == LOCALHOST:
         run_in_subprocess('mkcert -install')
 
-        if not (settings.localhost_certfile_path.exists() and settings.localhost_keyfile_path.exists()):
-            run_in_subprocess(f'mkcert -cert-file {settings.localhost_certfile_path} '
-                              f'-key-file {settings.localhost_keyfile_path} '
+        certfile_path = settings.localhost_certfile_path
+        keyfile_path = settings.localhost_keyfile_path
+
+        if not (certfile_path.exists() and keyfile_path.exists()):
+            run_in_subprocess(f'mkcert -cert-file {certfile_path} '
+                              f'-key-file {keyfile_path} '
                               f'{LOCALHOST}')
 
-        settings.localhost_certfile_path.chmod(mode=0o600)
-        settings.localhost_keyfile_path.chmod(mode=0o600)
+        certfile_path.chmod(mode=0o600)
+        keyfile_path.chmod(mode=0o600)
 
-        uvicorn_ssl_options = \
-            f'--ssl-certfile {settings.localhost_certfile_path} --ssl-keyfile {settings.localhost_keyfile_path} '
+        uvicorn_ssl_options = f'--ssl-certfile {certfile_path} ' \
+                              f'--ssl-keyfile {keyfile_path} '
     else:
         uvicorn_ssl_options = ''
 
-    run_in_subprocess(f"uvicorn --host {settings.host} --port {settings.port} "
-                      f"{uvicorn_ssl_options}{'--reload ' if settings.dev_mode else ''}"
-                      f"--app-dir {Path(__file__).parent} {server_mode.value}:app")
+    run_in_subprocess(f'uvicorn --host {settings.host} --port {settings.port} '
+                      f'{uvicorn_ssl_options}{"--reload " if settings.dev_mode else ""}'
+                      f'--app-dir {Path(__file__).parent} {server_mode.value}:app')
+
 
 @app.command()
 def user():
