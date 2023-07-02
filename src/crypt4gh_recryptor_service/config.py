@@ -72,7 +72,6 @@ class ComputeSettings(Settings):
 
 @lru_cache()
 def get_settings(server_mode: ServerMode):
-    print("get_settings")
     if server_mode == ServerMode.USER:
         return UserSettings()
     else:
@@ -96,7 +95,6 @@ def _get_yaml_config_file_path(working_dir: Path) -> Path:
 
 
 def yml_config_setting(settings: Settings) -> dict[str]:
-    print(repr(settings))
     server_mode = ServerMode.USER if isinstance(settings, UserSettings) else ServerMode.COMPUTE
     working_dir = _get_working_dir(server_mode)
     yml_config_file_path = _get_yaml_config_file_path(working_dir)
@@ -104,7 +102,6 @@ def yml_config_setting(settings: Settings) -> dict[str]:
     with open(yml_config_file_path) as f:
         ret = yaml.safe_load(f)
         if ret:
-            print(ret)
             return ret
         return {}
 
@@ -121,5 +118,4 @@ def setup_files(server_mode: ServerMode):
 
     settings = get_settings(server_mode).dict()
     with open(yml_config_file_path, 'w') as f:
-        print(settings)
         yaml.safe_dump(settings, f)
