@@ -5,19 +5,16 @@ from fastapi import FastAPI, Depends
 from pydantic import BaseModel, validator, Field
 from starlette.middleware.cors import CORSMiddleware
 
-from .config import get_settings, setup_files, ServerMode
+from crypt4gh_recryptor_service.config import ServerMode, get_user_settings, VERSION
 
-setup_files(ServerMode.USER)
 app = FastAPI()
 
-VERSION = '0.1.0'
 
-
-class RecryptParams(BaseModel):
+class UserRecryptParams(BaseModel):
     crypt4gh_header: str = Field(..., min_length=1)
 
 
-class RecryptResponse(BaseModel):
+class UserRecryptResponse(BaseModel):
     crypt4gh_header: str = Field(..., min_length=1)
     crypt4gh_compute_keypair_id: str = Field(..., min_length=1)
     crypt4gh_compute_keypair_expiration_date: Union[datetime, str]
@@ -30,13 +27,13 @@ class RecryptResponse(BaseModel):
 
 
 @app.get("/info")
-async def info(settings: Annotated[dict, Depends(get_settings)]) -> dict:
-    return {'name': 'crypt4gh_reencryptor', 'version': VERSION, 'app_name': settings.app_name}
+async def info(settings: Annotated[dict, Depends(get_user_settings)]) -> dict:
+    return {'name': 'crypt4gh-recryptor-service', 'version': VERSION, 'mode': settings.dev_mode}
 
 
 @app.post("/recrypt_header")
-async def recrypt_header(params: RecryptParams) -> RecryptResponse:
-    return RecryptResponse(
+async def recrypt_header(params: UserRecryptParams) -> UserRecryptResponse:
+    return UserRecryptResponse(
         crypt4gh_header= "Y3J5cHQ0Z2gBAAAAAQAAAGwAAAAAAAAAwvnIV483knYvtjGVPNdxYOy0s8IMfh2kSSStkQT9HxZM4J0AQzlQJdAl2LiWsvDeO7kn21J9HhUSBoieyPguM5ZcSh6s6W8anu998UTklLw5x7jMu0BNdK4yqPRue9NNiGttmw==",
         crypt4gh_compute_keypair_id= "cn:b38ac81f",
         crypt4gh_compute_keypair_expiration_date= "2023-06-30T12:15",

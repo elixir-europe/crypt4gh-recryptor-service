@@ -1,17 +1,20 @@
 [tool.poetry]
-name = "crypt4gh_recryptor_server"
+name = "crypt4gh_recryptor_service"
 version = "0.1.0"
 description = ""
 authors = ["Sveinung Gundersen <sveinugu@gmail.com>", "Morten Johansen <morj@ifi.uio.no>", "Pável Vázquez <p.v.faci@medisin.uio.no>"]
 readme = "README.md"
 packages = [{include = "crypt4gh_recryptor_service", from = "src"}]
 
+[tool.poetry.scripts]
+crypt4gh-recryptor-service = "crypt4gh_recryptor_service.main:app"
 
 [tool.poetry.dependencies]
 python = ">=3.8.1,<4.0"
 fastapi = "<1"
 uvicorn = {extras = ["standard"], version = "^0.20.0"}
 crypt4gh-recryptor = {git = "https://github.com/elixir-europe/GalaxySensitiveData-IS_py-recryptor.git"}
+typer = "^0.9.0"
 
 [tool.poetry.group.dev.dependencies]
 yapf = "^0.32.0"
