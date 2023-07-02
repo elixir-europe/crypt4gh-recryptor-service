@@ -12,17 +12,18 @@ crypt4gh-recryptor-service = "crypt4gh_recryptor_service.main:app"
 [tool.poetry.dependencies]
 python = ">=3.8.1,<4.0"
 fastapi = "<1"
-uvicorn = {extras = ["standard"], version = "^0.20.0"}
+uvicorn = {extras = ["standard"], version = "^0.22.0"}
 crypt4gh-recryptor = {git = "https://github.com/elixir-europe/GalaxySensitiveData-IS_py-recryptor.git"}
 typer = "^0.9.0"
 
 [tool.poetry.group.dev.dependencies]
-yapf = "^0.32.0"
 flake8 = "^6.0.0"
-isort = "^5.10.1"
-flake8-quotes = "^3.3.1"
-mypy = "^0.991"
+isort = "^5.12.0"
+flake8-quotes = "^3.3.2"
+mypy = "^1.4.1"
 toml = "^0.10.2"
+yapf = "^0.40.1"
+pre-commit = "^3.3.3"
 
 [build-system]
 requires = ["poetry-core"]
@@ -44,10 +45,57 @@ split_before_arithmetic_operator = true
 profile = "google"
 force_single_line = false
 multi_line_output = 1
-src_paths = ["src/examples", "tests"]
+src_paths = ["src/omnipy", "tests"]
 line_length = 100
 
 [tool.mypy]
+# Adapted from https://quantlane.com/blog/type-checking-large-codebase/
+
+# General
+
 python_version = "3.10"
 mypy_path = "src:tests"
+
+# Ensure full coverage
+#disallow_untyped_calls = true
+#disallow_untyped_defs = true
+#disallow_incomplete_defs = true
+#disallow_untyped_decorators = true
+#check_untyped_defs = true
+
+# Restrict dynamic typing
+#disallow_any_generics = true
+#disallow_subclassing_any = true
+#warn_return_any = true
+
+# Know exactly what you're doing
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unused_configs = true
+warn_unreachable = true
+show_error_codes = true
+
+# Explicit is better than implicit
+no_implicit_optional = true
+
+# Others
 warn_no_return = false
+show_column_numbers = true
+error_summary = true
+verbosity = 0
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+# pytest decorators are not typed
+disallow_untyped_decorators = false
+
+#[[tool.mypy.overrides]]
+#module = "firstmodule.*"
+#ignore_missing_imports = true
+#follow_imports = 'silent'
+
+[tool.pytest.ini_options]
+addopts = "--tb=native"
+testpaths = [
+    "tests",
+]

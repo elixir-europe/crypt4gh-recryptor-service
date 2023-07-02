@@ -1,15 +1,14 @@
 import abc
-import os
 from enum import Enum
-from functools import lru_cache, partial
+from functools import lru_cache
+import os
 from pathlib import Path
 from typing import Union
 
-import yaml
 from dotenv import dotenv_values
 from pydantic import BaseSettings
 from pydantic.env_settings import SettingsSourceCallable
-
+import yaml
 
 VERSION = '0.1.0'
 
@@ -30,9 +29,11 @@ USER_KEYS_DIR = 'user_keys'
 COMPUTE_KEYS_DIR = 'compute_keys'
 CERT_DIR = 'certs'
 
+
 class ServerMode(str, Enum):
     USER = 'user'
     COMPUTE = 'compute'
+
 
 def _get_working_dir(server_mode: ServerMode) -> Path:
     default_working_dir_attr = f'DEFAULT_WORKING_DIR_{server_mode.value.upper()}'
@@ -40,6 +41,7 @@ def _get_working_dir(server_mode: ServerMode) -> Path:
         return Path(env_working_dir)
     else:
         return Path.cwd().joinpath(Path(globals()[default_working_dir_attr]))
+
 
 def _get_yml_config_file_path(working_dir: Path) -> Path:
     return Path(working_dir, DEFAULT_YML_CONFIG_FILENAME)
@@ -123,7 +125,6 @@ class ComputeSettings(Settings):
         pass
 
 
-
 @lru_cache
 def get_user_settings() -> UserSettings:
     return UserSettings()
@@ -148,6 +149,7 @@ def yml_config_setting(settings: Settings) -> dict[str]:
             return ret
         return {}
 
+
 def _ensure_dirs(dir_path: Path):
     if not dir_path.exists():
         dir_path.mkdir(mode=0o700, parents=True)
@@ -165,7 +167,7 @@ def setup_files(server_mode: ServerMode):
 
     if not os.path.exists(yml_config_file_path):
         with open(yml_config_file_path, 'w') as f:
-            f.write("")
+            f.write('')
         yml_config_file_path.chmod(mode=0o600)
 
     settings = get_settings(server_mode).dict()

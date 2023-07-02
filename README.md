@@ -1,27 +1,13 @@
-# Crypt4GH Recryptor
+# Crypt4GH Recryptor Service
 
-## Development setup instructions
+## Installation
 
-- Install Poetry:
-  - `curl -sSL https://install.python-poetry.org | python3 -`
-- Install Python 3.10 through e.g. Conda, or directly in your IDE:
-  - `conda create -env myenv python=3.10`
-  - `conda activate myenv`
-- Install dependencies:
-  - `poetry install --with dev --no-root`
+`pip install crypt4gh-recryptor-server`
 
-### For mypy support in PyCharm
+## Setup and run - User mode
 
-- In PyCharm, install "Mypy" plugin (not "Mypy (Official)")
-  - `which mypy` to get path to mypy binary
-  - In the PyCharm settings for the mypy plugin:
-    - Select the mypy binary 
-    - Select `pyproject.toml` as the mypy config file
+`crypt4gh-recryptor-server user`
 
-### For automatic formatting and linting
+## Setup and run - Compute mode
 
-I have added my typical setup for automatic formatting and linting. The main alternative is to use black, which is easier to set up, but it does not have as many options. I am not fully happy with my config, but I at least like it better than black. 
-
-- In PyCharm -> File Watchers:
-  - Click arrow down icon
-  - Select `watchers.xml`
+`crypt4gh-recryptor-server compute`
