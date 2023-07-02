@@ -24,9 +24,14 @@ DEFAULT_PORT_USER = 61357
 DEFAULT_PORT_COMPUTE = 61358
 DEFAULT_SSL_CERTFILE = 'localhost.pem'
 DEFAULT_SSL_KEYFILE = 'localhost-key.pem'
+DEFAULT_USER_PRIVATE_KEY_FILE = 'user_key.priv'
+DEFAULT_USER_PUBLIC_KEY_FILE = 'user_key.pub'
+DEFAULT_COMPUTE_PRIVATE_KEY_FILE = 'compute_node_key.priv'
+DEFAULT_COMPUTE_PUBLIC_KEY_FILE = 'compute_node_key.pub'
 
 USER_KEYS_DIR = 'user_keys'
 COMPUTE_KEYS_DIR = 'compute_keys'
+HEADERS_DIR = 'headers'
 CERT_DIR = 'certs'
 
 
@@ -73,6 +78,10 @@ class Settings(BaseSettings):
         return Path(self.working_dir, COMPUTE_KEYS_DIR)
 
     @property
+    def headers_dir(self) -> Path:
+        return Path(self.working_dir, HEADERS_DIR)
+
+    @property
     def cert_dir(self) -> Path:
         return Path(self.working_dir, CERT_DIR)
 
@@ -88,6 +97,8 @@ class Settings(BaseSettings):
 class UserSettings(Settings):
     server_mode: ServerMode = ServerMode.USER
     port: int = DEFAULT_PORT_USER
+    user_private_key: str = DEFAULT_USER_PRIVATE_KEY_FILE
+    user_public_key: str = DEFAULT_USER_PUBLIC_KEY_FILE
 
     @property
     def working_dir(self) -> Path:
@@ -96,6 +107,18 @@ class UserSettings(Settings):
     @property
     def user_keys_dir(self) -> Path:
         return Path(self.working_dir, USER_KEYS_DIR)
+
+    @property
+    def user_private_key_path(self) -> Path:
+        return Path(self.user_keys_dir, DEFAULT_USER_PRIVATE_KEY_FILE)
+
+    @property
+    def user_public_key_path(self) -> Path:
+        return Path(self.user_keys_dir, DEFAULT_USER_PUBLIC_KEY_FILE)
+
+    @property
+    def compute_public_key_path(self) -> Path:
+        return Path(self.compute_keys_dir, DEFAULT_COMPUTE_PUBLIC_KEY_FILE)
 
     class Config(BaseConfig):
         pass
@@ -162,7 +185,9 @@ def setup_files(server_mode: ServerMode):
     _ensure_dirs(working_dir)
     if server_mode == ServerMode.USER:
         _ensure_dirs(Path(working_dir, USER_KEYS_DIR))
+
     _ensure_dirs(Path(working_dir, COMPUTE_KEYS_DIR))
+    _ensure_dirs(Path(working_dir, HEADERS_DIR))
     _ensure_dirs(Path(working_dir, CERT_DIR))
 
     if not os.path.exists(yml_config_file_path):
@@ -171,5 +196,6 @@ def setup_files(server_mode: ServerMode):
         yml_config_file_path.chmod(mode=0o600)
 
     settings = get_settings(server_mode).dict()
+
     with open(yml_config_file_path, 'w') as f:
         yaml.safe_dump(settings, f)
