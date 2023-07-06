@@ -72,6 +72,6 @@ async def recrypt_header(
 
     return UserRecryptResponse(
         crypt4gh_header=header,
-        crypt4gh_compute_keypair_id=recrypted_header_path,
+        crypt4gh_compute_keypair_id=recrypted_header_path[-8:],
         crypt4gh_compute_keypair_expiration_date='2023-06-30T12:15',
     )
