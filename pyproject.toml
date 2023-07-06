@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "crypt4gh_recryptor_service"
-version = "0.1.0"
+version = "0.2.0"
 description = ""
 authors = ["Sveinung Gundersen <sveinugu@gmail.com>", "Morten Johansen <morj@ifi.uio.no>", "Pável Vázquez <p.v.faci@medisin.uio.no>"]
 readme = "README.md"

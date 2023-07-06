@@ -10,7 +10,7 @@ from pydantic import BaseSettings
 from pydantic.env_settings import SettingsSourceCallable
 import yaml
 
-VERSION = '0.1.0'
+VERSION = '0.2.0'
 
 ENV_PREFIX = 'C4GH_RECRYPTOR_'
 ENV_FILE = '.env'
