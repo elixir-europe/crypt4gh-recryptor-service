@@ -131,6 +131,8 @@ class Settings(BaseSettings):
 class UserSettings(Settings):
     server_mode: ServerMode = ServerMode.USER
     port: int = DEFAULT_PORT_USER
+    compute_host: str = DEFAULT_HOST
+    compute_port: int = DEFAULT_PORT_COMPUTE
     user_private_key: str = DEFAULT_USER_PRIVATE_KEY_FILE
     user_public_key: str = DEFAULT_USER_PUBLIC_KEY_FILE
 

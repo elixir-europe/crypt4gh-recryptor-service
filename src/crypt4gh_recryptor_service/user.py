@@ -7,10 +7,11 @@ import tempfile
 from typing import Annotated, Tuple, Union
 
 from crypt4gh_recryptor_service.app import app, common_info
+from crypt4gh_recryptor_service.compute import GetComputeKeyInfoParams
 from crypt4gh_recryptor_service.config import get_user_settings, UserSettings
 from crypt4gh_recryptor_service.util import run_in_subprocess
 from crypt4gh_recryptor_service.validators import to_iso
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, Field, validator
 
 
@@ -56,9 +57,9 @@ def _rename_temp_header(temp_header_path: Path, settings: UserSettings) -> Tuple
 
 
 @app.post('/recrypt_header')
-async def recrypt_header(
-        params: UserRecryptParams,
-        settings: Annotated[UserSettings, Depends(get_user_settings)]) -> UserRecryptResponse:
+async def recrypt_header(params: UserRecryptParams,
+                         settings: Annotated[UserSettings, Depends(get_user_settings)],
+                         request: Request) -> UserRecryptResponse:
     in_header_path = _write_orig_header_to_file(params.crypt4gh_header, settings)
     out_header_path = _get_temp_header_filename(settings)
     try:
@@ -80,8 +81,17 @@ async def recrypt_header(
             raise e
     recrypted_header_path, header = _rename_temp_header(out_header_path, settings)
 
+    with open(settings.compute_public_key_path, 'r') as user_private_key:
+        client = request.state.client
+        url = f'https://{settings.compute_host}:{settings.compute_port}/get_compute_key_info'
+        payload = GetComputeKeyInfoParams(crypt4gh_user_public_key=user_private_key.read())
+        response = await client.post(url, data=payload)
+
+    key_info = response.json()
+
     return UserRecryptResponse(
         crypt4gh_header=header,
-        crypt4gh_compute_keypair_id=recrypted_header_path[-8:],
-        crypt4gh_compute_keypair_expiration_date='2023-06-30T12:15',
+        crypt4gh_compute_keypair_id=key_info.get('crypt4gh_compute_keypair_id'),
+        crypt4gh_compute_keypair_expiration_date=key_info.get(
+            'crypt4gh_compute_keypair_expiration_date'),
     )

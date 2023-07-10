@@ -8,6 +8,17 @@ from fastapi import Depends
 from pydantic import BaseModel, Field, validator
 
 
+class GetComputeKeyInfoParams(BaseModel):
+    crypt4gh_user_public_key: str = Field(..., min_length=1)
+
+
+class GetComputeKeyInfoResponse(BaseModel):
+    crypt4gh_compute_keypair_id: str = Field(..., min_length=1)
+    crypt4gh_compute_keypair_expiration_date: Union[datetime, str]
+
+    _to_iso = validator('crypt4gh_compute_keypair_expiration_date', allow_reuse=True)(to_iso)
+
+
 class ComputeRecryptParams(BaseModel):
     crypt4gh_header: str = Field(..., min_length=1)
 
@@ -23,6 +34,14 @@ class ComputeRecryptResponse(BaseModel):
 @app.get('/info')
 async def info(settings: Annotated[ComputeSettings, Depends(get_compute_settings)]) -> dict:
     return common_info(settings)
+
+
+@app.post('/get_compute_key_info')
+async def get_compute_key_info(params: GetComputeKeyInfoParams) -> GetComputeKeyInfoResponse:
+    return GetComputeKeyInfoResponse(
+        crypt4gh_compute_keypair_id='cn:b38ac81f',
+        crypt4gh_compute_keypair_expiration_date='2023-06-30T12:15',
+    )
 
 
 @app.post('/recrypt_header')
