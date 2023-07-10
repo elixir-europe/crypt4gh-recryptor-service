@@ -3,7 +3,7 @@ from enum import Enum
 from functools import lru_cache
 import os
 from pathlib import Path
-from typing import Union
+from typing import Any, Callable, TypeAlias, Union
 
 from dotenv import dotenv_values
 from pydantic import BaseSettings
@@ -34,16 +34,23 @@ COMPUTE_KEYS_DIR = 'compute_keys'
 HEADERS_DIR = 'headers'
 CERT_DIR = 'certs'
 
+_builtin_dict: TypeAlias = dict
+
 
 class ServerMode(str, Enum):
     USER = 'user'
     COMPUTE = 'compute'
 
 
+C4ghSettingsSourceCallable = Callable[['Settings'], dict[str, Any]]
+
+
 class BaseConfig:
-    env_file = ENV_FILE
-    env_prefix = ENV_PREFIX
-    use_enum_values = True
+    env_file: str = ENV_FILE
+    env_prefix: str = ENV_PREFIX
+    use_enum_values: bool = True
+    underscore_attrs_are_private: bool = True
+    validate_assignment: bool = True
 
     @classmethod
     def customise_sources(
@@ -51,18 +58,40 @@ class BaseConfig:
         init_settings: SettingsSourceCallable,
         env_settings: SettingsSourceCallable,
         file_secret_settings: SettingsSourceCallable,
-    ) -> tuple[SettingsSourceCallable, ...]:
-        # Add load from yml file, change priority and remove file secret option
-        return env_settings, yml_config_setting
+    ) -> tuple[C4ghSettingsSourceCallable, ...]:
+        store_env_settings = get_store_env_settings_callable(env_settings)
+        return yml_config_setting, store_env_settings,
 
 
 class Settings(BaseSettings):
+    _environ_vars: dict[str, Any] = {}
+    _overridden_by_environ_vars: dict[str, Any] = {}
+
     host: str = DEFAULT_HOST
     port: int
     server_mode: ServerMode
     ssl_certfile = DEFAULT_SSL_CERTFILE
     ssl_keyfile = DEFAULT_SSL_KEYFILE
     dev_mode: bool = False
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._override_by_environ_vars()
+
+    def _override_by_environ_vars(self):
+        for key, val in self._environ_vars.items():
+            self._overridden_by_environ_vars[key] = getattr(self, key)
+            setattr(self, key, val)
+
+    def update_environ_vars(self, environ_vars: _builtin_dict[str, Any]):
+        self._environ_vars.update(environ_vars)
+
+    def dict(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        super_dict = super().dict(*args, **kwargs)
+        for key, val in self._overridden_by_environ_vars.items():
+            if key in super_dict:
+                super_dict[key] = val
+        return super_dict
 
     @property
     @abc.abstractmethod
@@ -153,7 +182,17 @@ def get_settings(server_mode: ServerMode) -> Union[UserSettings, ComputeSettings
         return get_compute_settings()
 
 
-def yml_config_setting(settings: Settings) -> dict[str]:
+def get_store_env_settings_callable(
+        env_settings_func: SettingsSourceCallable) -> C4ghSettingsSourceCallable:
+    def store_env_settings(settings: Settings) -> dict[str, Any]:
+        env_settings = env_settings_func(settings)
+        settings.update_environ_vars(env_settings)
+        return {}
+
+    return store_env_settings
+
+
+def yml_config_setting(settings: Settings) -> dict[str, Any]:
     with open(settings.yml_config_file_path) as f:
         ret = yaml.safe_load(f)
         if ret:
