@@ -1,15 +1,21 @@
+from pathlib import Path
 import subprocess
 
 from crypt4gh_recryptor_service.config import LOCALHOST
 
 
-def run_in_subprocess(cmd: str, verbose: bool = False):
+def run_in_subprocess(cmd: str, verbose: bool = False, capture_output: bool = False):
     if verbose:
         print('-' * 26)
         print(f'Running `{cmd}`:')
         print('-' * 26)
         print()
-    subprocess.run(cmd, shell=True, check=True)
+    return subprocess.run(
+        cmd,
+        shell=True,
+        check=True,
+        capture_output=True if capture_output else False,
+        text=True if capture_output else False)
 
 
 def generate_uvicorn_ssl_cert_options(settings):
@@ -42,3 +48,10 @@ def setup_localhost_ssl_cert(settings):
     certfile_path.chmod(mode=0o600)
     keyfile_path.chmod(mode=0o600)
     return certfile_path, keyfile_path
+
+
+def get_ssl_root_cert_path() -> Path:
+    results = run_in_subprocess('mkcert -CAROOT', verbose=True, capture_output=True)
+    path = Path(results.stdout.strip(), 'rootCA.pem')
+    print(path)
+    return path
