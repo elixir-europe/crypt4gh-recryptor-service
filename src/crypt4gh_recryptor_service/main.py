@@ -1,7 +1,13 @@
 from pathlib import Path
+from typing import cast
 
-from crypt4gh_recryptor_service.config import get_settings, LOCALHOST, ServerMode, setup_files
-from crypt4gh_recryptor_service.util import (generate_uvicorn_ssl_cert_options,
+from crypt4gh_recryptor_service.config import (get_settings,
+                                               LOCALHOST,
+                                               ServerMode,
+                                               setup_files,
+                                               UserSettings)
+from crypt4gh_recryptor_service.util import (generate_keypair,
+                                             generate_uvicorn_ssl_cert_options,
                                              run_in_subprocess,
                                              setup_localhost_ssl_cert)
 import typer
@@ -19,7 +25,19 @@ def _setup_and_run(server_mode: ServerMode):
     uvicorn_ssl_options = generate_uvicorn_ssl_cert_options(settings)
 
     if server_mode == ServerMode.USER:
-        for key_path in [settings.user_private_key_path, settings.user_public_key_path]:
+        settings = cast(UserSettings, settings)
+        keypair_paths = [settings.user_private_key_path, settings.user_public_key_path]
+        if all(not key_path.exists() for key_path in keypair_paths):
+            print('User key pair files do not exist. Generating new keypair...')
+
+            private_key, public_key = keypair_paths
+            generate_keypair(
+                private_key,
+                public_key,
+                settings.private_key_passphrase,
+                settings.private_key_comment,
+                verbose=settings.dev_mode)
+        for key_path in keypair_paths:
             if not key_path.exists():
                 raise ValueError(f'User key file "{key_path}" is missing!')
 

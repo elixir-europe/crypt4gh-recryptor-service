@@ -19,6 +19,15 @@ def generate_uvicorn_ssl_cert_options(settings):
         return ''
 
 
+def generate_keypair(private_key, public_key, passphrase, comment, verbose: bool = False):
+    run_in_subprocess(
+        f'crypt4gh-recryptor generate-keypair'
+        f' --private {private_key}'
+        f' --public {public_key}' + (f' --passphrase "{passphrase}"' if passphrase else '') +
+        (f' --comment "{comment}"' if comment else ''),
+        verbose=verbose)
+
+
 def setup_localhost_ssl_cert(settings):
     run_in_subprocess('mkcert -install', verbose=True)
     certfile_path = settings.localhost_certfile_path
