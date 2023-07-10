@@ -1,7 +1,9 @@
 from pathlib import Path
 
 from crypt4gh_recryptor_service.config import get_settings, LOCALHOST, ServerMode, setup_files
-from crypt4gh_recryptor_service.util import run_in_subprocess
+from crypt4gh_recryptor_service.util import (generate_uvicorn_ssl_cert_options,
+                                             run_in_subprocess,
+                                             setup_localhost_ssl_cert)
 import typer
 
 app = typer.Typer()
@@ -12,23 +14,9 @@ def _setup_and_run(server_mode: ServerMode):
     settings = get_settings(server_mode)
 
     if settings.host == LOCALHOST:
-        run_in_subprocess('mkcert -install')
+        setup_localhost_ssl_cert(settings)
 
-        certfile_path = settings.localhost_certfile_path
-        keyfile_path = settings.localhost_keyfile_path
-
-        if not (certfile_path.exists() and keyfile_path.exists()):
-            run_in_subprocess(f'mkcert -cert-file {certfile_path} '
-                              f'-key-file {keyfile_path} '
-                              f'{LOCALHOST}')
-
-        certfile_path.chmod(mode=0o600)
-        keyfile_path.chmod(mode=0o600)
-
-        uvicorn_ssl_options = f'--ssl-certfile {certfile_path} ' \
-                              f'--ssl-keyfile {keyfile_path} '
-    else:
-        uvicorn_ssl_options = ''
+    uvicorn_ssl_options = generate_uvicorn_ssl_cert_options(settings)
 
     if server_mode == ServerMode.USER:
         for key_path in [settings.user_private_key_path, settings.user_public_key_path]:
