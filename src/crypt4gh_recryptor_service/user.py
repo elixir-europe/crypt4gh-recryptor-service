@@ -7,12 +7,12 @@ import tempfile
 from typing import Annotated, Tuple, Union
 
 from crypt4gh_recryptor_service.app import app, common_info
-from crypt4gh_recryptor_service.compute import ComputeKeyInfoParams
+from crypt4gh_recryptor_service.compute import ComputeKeyInfoParams, ComputeKeyInfoResponse
 from crypt4gh_recryptor_service.config import get_user_settings, UserSettings
 from crypt4gh_recryptor_service.util import run_in_subprocess
 from crypt4gh_recryptor_service.validators import to_iso
 from fastapi import Depends, HTTPException, Request
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, parse_obj_as, validator
 
 
 class UserRecryptParams(BaseModel):
@@ -87,11 +87,10 @@ async def recrypt_header(params: UserRecryptParams,
         payload = ComputeKeyInfoParams(crypt4gh_user_public_key=user_private_key.read())
         response = await client.post(url, data=payload)
 
-    key_info = response.json()
+    key_info = parse_obj_as(ComputeKeyInfoResponse, response.json())
 
     return UserRecryptResponse(
         crypt4gh_header=header,
-        crypt4gh_compute_keypair_id=key_info.get('crypt4gh_compute_keypair_id'),
-        crypt4gh_compute_keypair_expiration_date=key_info.get(
-            'crypt4gh_compute_keypair_expiration_date'),
+        crypt4gh_compute_keypair_id=key_info.crypt4gh_compute_keypair_id,
+        crypt4gh_compute_keypair_expiration_date=key_info.crypt4gh_compute_keypair_expiration_date,
     )
