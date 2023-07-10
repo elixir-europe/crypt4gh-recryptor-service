@@ -3,6 +3,7 @@ from typing import Annotated, Union
 
 from crypt4gh_recryptor_service.app import app, common_info
 from crypt4gh_recryptor_service.config import ComputeSettings, get_compute_settings
+from crypt4gh_recryptor_service.validators import to_iso
 from fastapi import Depends
 from pydantic import BaseModel, Field, validator
 
@@ -16,11 +17,7 @@ class ComputeRecryptResponse(BaseModel):
     crypt4gh_compute_keypair_id: str = Field(..., min_length=1)
     crypt4gh_compute_keypair_expiration_date: Union[datetime, str]
 
-    @validator('crypt4gh_compute_keypair_expiration_date')
-    def to_iso(cls, v):
-        if isinstance(v, str):
-            v = datetime(v)
-        return v.isoformat(timespec='minutes')
+    _to_iso = validator('crypt4gh_compute_keypair_expiration_date', allow_reuse=True)(to_iso)
 
 
 @app.get('/info')
