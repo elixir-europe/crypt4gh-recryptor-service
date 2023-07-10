@@ -1,10 +1,11 @@
+from abc import abstractmethod
 from base64 import b64decode, b64encode
 from datetime import datetime
 from hashlib import sha256
 from pathlib import Path
 from subprocess import CalledProcessError
 import tempfile
-from typing import Annotated, Tuple, Union
+from typing import Annotated, Generic, Optional, TypeVar, Union
 
 from crypt4gh_recryptor_service.app import app, common_info
 from crypt4gh_recryptor_service.compute import ComputeKeyInfoParams, ComputeKeyInfoResponse
@@ -32,42 +33,94 @@ async def info(settings: Annotated[UserSettings, Depends(get_user_settings)]) ->
     return common_info(settings)
 
 
-def _write_orig_header_to_file(crypt4gh_header: str, settings: UserSettings) -> Path:
-    header = b64decode(crypt4gh_header)
-    filename = sha256(header).hexdigest()
-    path = Path(settings.headers_dir, filename)
-    with open(path, 'wb') as header_file:
-        header_file.write(header)
-    path.chmod(mode=0o600)
-    return path
+T = TypeVar('T', bytes, str)
 
 
-def _get_temp_header_filename(settings: UserSettings) -> Path:
-    return Path(tempfile.mktemp(dir=settings.headers_dir))
+class HashedFile(Generic[T]):
+    def __init__(self, dir: Path, contents: Optional[T] = None):
+        self._dir: Path = dir
+        self._contents: Optional[bytes] = self._to_bytes(contents) if contents else None
+        self._filename: str = self.sha256 if self._contents else tempfile.mktemp(dir=self._dir)
+
+    @classmethod
+    def _to_bytes(cls, contents: T) -> bytes:
+        assert isinstance(contents, bytes)
+        return contents
+
+    @property
+    @abstractmethod
+    def contents(self) -> T:
+        ...
+
+    @property
+    def sha256(self):
+        return sha256(self._contents).hexdigest()
+
+    @property
+    def path(self) -> Path:
+        return self._dir.joinpath(self._filename)
+
+    def write_to_storage(self):
+        assert self._contents is not None
+        with open(self.path, 'wb') as hashed_file:
+            hashed_file.write(self._contents)
+        self.path.chmod(mode=0o600)
+
+    def read_from_storage(self):
+        with open(self.path, 'rb') as hashed_file:
+            self._contents = hashed_file.read()
+            if self._filename != self.sha256:
+                self.path.rename(self._dir.joinpath(self.sha256))
 
 
-def _rename_temp_header(temp_header_path: Path, settings: UserSettings) -> Tuple[str, str]:
-    with open(temp_header_path, 'rb') as header_file:
-        header = header_file.read()
-    new_filename = sha256(header).hexdigest()
-    new_path = Path(settings.headers_dir, new_filename)
-    temp_header_path.rename(new_path)
-    new_path.chmod(mode=0o600)
-    return new_filename, b64encode(header).decode('ascii')
+class HashedBytesFile(HashedFile[bytes]):
+    @property
+    def contents(self) -> bytes:
+        assert self._contents is not None
+        return self._contents
+
+
+class HeaderFile(HashedFile[str]):
+    @classmethod
+    def _to_bytes(cls, contents: T) -> bytes:
+        return b64decode(contents)
+
+    @property
+    def contents(self) -> str:
+        assert self._contents is not None
+        return b64encode(self._contents).decode('ascii')
 
 
 @app.post('/recrypt_header')
 async def recrypt_header(params: UserRecryptParams,
                          settings: Annotated[UserSettings, Depends(get_user_settings)],
                          request: Request) -> UserRecryptResponse:
-    in_header_path = _write_orig_header_to_file(params.crypt4gh_header, settings)
-    out_header_path = _get_temp_header_filename(settings)
+
+    with open(settings.user_public_key_path, 'r') as user_public_key:
+        client = request.state.client
+        url = f'https://{settings.compute_host}:{settings.compute_port}/get_compute_key_info'
+        payload = ComputeKeyInfoParams(crypt4gh_user_public_key=user_public_key.read())
+        print(url)
+        print(payload)
+        response = await client.post(url, json=payload.dict())
+        response.raise_for_status()
+
+    key_info = parse_obj_as(ComputeKeyInfoResponse, response.json())
+
+    compute_key_file = HashedBytesFile(settings.compute_keys_dir,
+                                       key_info.crypt4gh_compute_public_key.encode('ascii'))
+    compute_key_file.write_to_storage()
+
+    in_header_file = HeaderFile(settings.headers_dir, params.crypt4gh_header)
+    in_header_file.write_to_storage()
+    out_header_file = HeaderFile(settings.headers_dir)
+
     try:
         run_in_subprocess(
             f'crypt4gh-recryptor recrypt '
-            f'--encryption-key {settings.compute_public_key_path} '
-            f'-i {in_header_path} '
-            f'-o {out_header_path} '
+            f'--encryption-key {compute_key_file.path} '
+            f'-i {in_header_file.path} '
+            f'-o {out_header_file.path} '
             f'--decryption-key {settings.user_private_key_path}',
             verbose=settings.dev_mode)
     except CalledProcessError as e:
@@ -79,18 +132,11 @@ async def recrypt_header(params: UserRecryptParams,
                 "decryptable by the user's private key") from e
         else:
             raise e
-    recrypted_header_path, header = _rename_temp_header(out_header_path, settings)
 
-    with open(settings.compute_public_key_path, 'r') as user_private_key:
-        client = request.state.client
-        url = f'https://{settings.compute_host}:{settings.compute_port}/get_compute_key_info'
-        payload = ComputeKeyInfoParams(crypt4gh_user_public_key=user_private_key.read())
-        response = await client.post(url, data=payload)
-
-    key_info = parse_obj_as(ComputeKeyInfoResponse, response.json())
+    out_header_file.read_from_storage()
 
     return UserRecryptResponse(
-        crypt4gh_header=header,
+        crypt4gh_header=out_header_file.contents,
         crypt4gh_compute_keypair_id=key_info.crypt4gh_compute_keypair_id,
         crypt4gh_compute_keypair_expiration_date=key_info.crypt4gh_compute_keypair_expiration_date,
     )
