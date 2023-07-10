@@ -63,11 +63,13 @@ async def recrypt_header(
         settings: Annotated[UserSettings, Depends(get_user_settings)]) -> UserRecryptResponse:
     in_header_path = _write_orig_header_to_file(params.crypt4gh_header, settings)
     out_header_path = _get_temp_header_filename(settings)
-    run_in_subprocess(f'crypt4gh-recryptor recrypt '
-                      f'--encryption-key {settings.compute_public_key_path} '
-                      f'-i {in_header_path} '
-                      f'-o {out_header_path} '
-                      f'--decryption-key {settings.user_private_key_path}')
+    run_in_subprocess(
+        f'crypt4gh-recryptor recrypt '
+        f'--encryption-key {settings.compute_public_key_path} '
+        f'-i {in_header_path} '
+        f'-o {out_header_path} '
+        f'--decryption-key {settings.user_private_key_path}',
+        verbose=settings.dev_mode)
     recrypted_header_path, header = _rename_temp_header(out_header_path, settings)
 
     return UserRecryptResponse(

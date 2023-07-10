@@ -3,11 +3,12 @@ import subprocess
 from crypt4gh_recryptor_service.config import LOCALHOST
 
 
-def run_in_subprocess(cmd: str):
-    print('-' * 26)
-    print(f'Running `{cmd}`:')
-    print('-' * 26)
-    print()
+def run_in_subprocess(cmd: str, verbose: bool = False):
+    if verbose:
+        print('-' * 26)
+        print(f'Running `{cmd}`:')
+        print('-' * 26)
+        print()
     subprocess.run(cmd, shell=True, check=True)
 
 

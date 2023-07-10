@@ -41,9 +41,11 @@ def _setup_and_run(server_mode: ServerMode):
             if not key_path.exists():
                 raise ValueError(f'User key file "{key_path}" is missing!')
 
-    run_in_subprocess(f'uvicorn --host {settings.host} --port {settings.port} '
-                      f'{uvicorn_ssl_options}{"--reload " if settings.dev_mode else ""}'
-                      f'--app-dir {Path(__file__).parent} {server_mode.value}:app')
+    run_in_subprocess(
+        f'uvicorn --host {settings.host} --port {settings.port} '
+        f'{uvicorn_ssl_options}{"--reload " if settings.dev_mode else ""}'
+        f'--app-dir {Path(__file__).parent} {server_mode.value}:app',
+        verbose=settings.dev_mode)
 
 
 @app.command()
