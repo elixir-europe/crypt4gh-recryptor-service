@@ -2,13 +2,14 @@ from base64 import b64decode, b64encode
 from datetime import datetime
 from hashlib import sha256
 from pathlib import Path
+from subprocess import CalledProcessError
 import tempfile
 from typing import Annotated, Tuple, Union
 
 from crypt4gh_recryptor_service.app import app, common_info
 from crypt4gh_recryptor_service.config import get_user_settings, UserSettings
 from crypt4gh_recryptor_service.util import run_in_subprocess
-from fastapi import Depends
+from fastapi import Depends, HTTPException
 from pydantic import BaseModel, Field, validator
 
 
@@ -63,13 +64,23 @@ async def recrypt_header(
         settings: Annotated[UserSettings, Depends(get_user_settings)]) -> UserRecryptResponse:
     in_header_path = _write_orig_header_to_file(params.crypt4gh_header, settings)
     out_header_path = _get_temp_header_filename(settings)
-    run_in_subprocess(
-        f'crypt4gh-recryptor recrypt '
-        f'--encryption-key {settings.compute_public_key_path} '
-        f'-i {in_header_path} '
-        f'-o {out_header_path} '
-        f'--decryption-key {settings.user_private_key_path}',
-        verbose=settings.dev_mode)
+    try:
+        run_in_subprocess(
+            f'crypt4gh-recryptor recrypt '
+            f'--encryption-key {settings.compute_public_key_path} '
+            f'-i {in_header_path} '
+            f'-o {out_header_path} '
+            f'--decryption-key {settings.user_private_key_path}',
+            verbose=settings.dev_mode)
+    except CalledProcessError as e:
+        if e.returncode == 1:
+            raise HTTPException(
+                status_code=406,
+                detail='The key header was not able to decode the header. '
+                'Please make sure that the encrypted header is '
+                "decryptable by the user's private key") from e
+        else:
+            raise e
     recrypted_header_path, header = _rename_temp_header(out_header_path, settings)
 
     return UserRecryptResponse(
