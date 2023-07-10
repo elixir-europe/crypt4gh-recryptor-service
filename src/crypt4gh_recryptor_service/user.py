@@ -7,7 +7,7 @@ import tempfile
 from typing import Annotated, Tuple, Union
 
 from crypt4gh_recryptor_service.app import app, common_info
-from crypt4gh_recryptor_service.compute import GetComputeKeyInfoParams
+from crypt4gh_recryptor_service.compute import ComputeKeyInfoParams
 from crypt4gh_recryptor_service.config import get_user_settings, UserSettings
 from crypt4gh_recryptor_service.util import run_in_subprocess
 from crypt4gh_recryptor_service.validators import to_iso
@@ -84,7 +84,7 @@ async def recrypt_header(params: UserRecryptParams,
     with open(settings.compute_public_key_path, 'r') as user_private_key:
         client = request.state.client
         url = f'https://{settings.compute_host}:{settings.compute_port}/get_compute_key_info'
-        payload = GetComputeKeyInfoParams(crypt4gh_user_public_key=user_private_key.read())
+        payload = ComputeKeyInfoParams(crypt4gh_user_public_key=user_private_key.read())
         response = await client.post(url, data=payload)
 
     key_info = response.json()

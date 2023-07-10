@@ -8,11 +8,11 @@ from fastapi import Depends
 from pydantic import BaseModel, Field, validator
 
 
-class GetComputeKeyInfoParams(BaseModel):
+class ComputeKeyInfoParams(BaseModel):
     crypt4gh_user_public_key: str = Field(..., min_length=1)
 
 
-class GetComputeKeyInfoResponse(BaseModel):
+class ComputeKeyInfoResponse(BaseModel):
     crypt4gh_compute_keypair_id: str = Field(..., min_length=1)
     crypt4gh_compute_keypair_expiration_date: Union[datetime, str]
 
@@ -37,8 +37,9 @@ async def info(settings: Annotated[ComputeSettings, Depends(get_compute_settings
 
 
 @app.post('/get_compute_key_info')
-async def get_compute_key_info(params: GetComputeKeyInfoParams) -> GetComputeKeyInfoResponse:
-    return GetComputeKeyInfoResponse(
+async def get_compute_key_info(params: ComputeKeyInfoParams) -> ComputeKeyInfoResponse:
+
+    return ComputeKeyInfoResponse(
         crypt4gh_compute_keypair_id='cn:b38ac81f',
         crypt4gh_compute_keypair_expiration_date='2023-06-30T12:15',
     )
