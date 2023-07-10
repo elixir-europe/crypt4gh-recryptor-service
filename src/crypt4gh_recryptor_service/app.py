@@ -1,14 +1,25 @@
+from contextlib import asynccontextmanager
+
 from crypt4gh_recryptor_service.config import Settings, VERSION
+from crypt4gh_recryptor_service.util import get_ssl_root_cert_path
 from fastapi import FastAPI
+import httpx
 from starlette.middleware.cors import CORSMiddleware
 
-app = FastAPI()
 
-origins = ['*']
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialise the Client on startup and add it to the state
+    async with httpx.AsyncClient(verify=str(get_ssl_root_cert_path())) as client:
+        yield {'client': client}
+        # The Client closes on shutdown
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=['*'],
     allow_credentials=True,
     allow_methods=['POST', 'GET'],
     allow_headers=['*'],
