@@ -1,15 +1,11 @@
-from abc import abstractmethod
-from base64 import b64decode, b64encode
 from datetime import datetime
-from hashlib import sha256
-from pathlib import Path
 from subprocess import CalledProcessError
-import tempfile
-from typing import Annotated, Generic, Optional, TypeVar, Union
+from typing import Annotated, Union
 
 from crypt4gh_recryptor_service.app import app, common_info
 from crypt4gh_recryptor_service.compute import ComputeKeyInfoParams, ComputeKeyInfoResponse
 from crypt4gh_recryptor_service.config import get_user_settings, UserSettings
+from crypt4gh_recryptor_service.storage import HashedBytesFile, HeaderFile
 from crypt4gh_recryptor_service.util import run_in_subprocess
 from crypt4gh_recryptor_service.validators import to_iso
 from fastapi import Depends, HTTPException, Request
@@ -33,64 +29,6 @@ async def info(settings: Annotated[UserSettings, Depends(get_user_settings)]) ->
     return common_info(settings)
 
 
-T = TypeVar('T', bytes, str)
-
-
-class HashedFile(Generic[T]):
-    def __init__(self, dir: Path, contents: Optional[T] = None):
-        self._dir: Path = dir
-        self._contents: Optional[bytes] = self._to_bytes(contents) if contents else None
-        self._filename: str = self.sha256 if self._contents else tempfile.mktemp(dir=self._dir)
-
-    @classmethod
-    def _to_bytes(cls, contents: T) -> bytes:
-        assert isinstance(contents, bytes)
-        return contents
-
-    @property
-    @abstractmethod
-    def contents(self) -> T:
-        ...
-
-    @property
-    def sha256(self):
-        return sha256(self._contents).hexdigest()
-
-    @property
-    def path(self) -> Path:
-        return self._dir.joinpath(self._filename)
-
-    def write_to_storage(self):
-        assert self._contents is not None
-        with open(self.path, 'wb') as hashed_file:
-            hashed_file.write(self._contents)
-        self.path.chmod(mode=0o600)
-
-    def read_from_storage(self):
-        with open(self.path, 'rb') as hashed_file:
-            self._contents = hashed_file.read()
-            if self._filename != self.sha256:
-                self.path.rename(self._dir.joinpath(self.sha256))
-
-
-class HashedBytesFile(HashedFile[bytes]):
-    @property
-    def contents(self) -> bytes:
-        assert self._contents is not None
-        return self._contents
-
-
-class HeaderFile(HashedFile[str]):
-    @classmethod
-    def _to_bytes(cls, contents: T) -> bytes:
-        return b64decode(contents)
-
-    @property
-    def contents(self) -> str:
-        assert self._contents is not None
-        return b64encode(self._contents).decode('ascii')
-
-
 @app.post('/recrypt_header')
 async def recrypt_header(params: UserRecryptParams,
                          settings: Annotated[UserSettings, Depends(get_user_settings)],
@@ -100,8 +38,6 @@ async def recrypt_header(params: UserRecryptParams,
         client = request.state.client
         url = f'https://{settings.compute_host}:{settings.compute_port}/get_compute_key_info'
         payload = ComputeKeyInfoParams(crypt4gh_user_public_key=user_public_key.read())
-        print(url)
-        print(payload)
         response = await client.post(url, json=payload.dict())
         response.raise_for_status()
 
