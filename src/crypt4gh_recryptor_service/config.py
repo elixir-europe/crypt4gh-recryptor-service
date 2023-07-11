@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from typing import Any, Callable, TypeAlias, Union
 
+from crypt4gh_recryptor_service.util import ensure_dirs
 from dotenv import dotenv_values
 from pydantic import BaseSettings
 from pydantic.env_settings import SettingsSourceCallable
@@ -219,22 +220,17 @@ def _get_yml_config_file_path(working_dir: Path) -> Path:
     return Path(working_dir, DEFAULT_YML_CONFIG_FILENAME)
 
 
-def _ensure_dirs(dir_path: Path):
-    if not dir_path.exists():
-        dir_path.mkdir(mode=0o700, parents=True)
-
-
 def setup_files(server_mode: ServerMode):
     working_dir = _get_working_dir(server_mode)
     yml_config_file_path = _get_yml_config_file_path(working_dir)
 
-    _ensure_dirs(working_dir)
+    ensure_dirs(working_dir)
     if server_mode == ServerMode.USER:
-        _ensure_dirs(Path(working_dir, USER_KEYS_DIR))
+        ensure_dirs(Path(working_dir, USER_KEYS_DIR))
 
-    _ensure_dirs(Path(working_dir, COMPUTE_KEYS_DIR))
-    _ensure_dirs(Path(working_dir, HEADERS_DIR))
-    _ensure_dirs(Path(working_dir, CERT_DIR))
+    ensure_dirs(Path(working_dir, COMPUTE_KEYS_DIR))
+    ensure_dirs(Path(working_dir, HEADERS_DIR))
+    ensure_dirs(Path(working_dir, CERT_DIR))
 
     if not os.path.exists(yml_config_file_path):
         with open(yml_config_file_path, 'w') as f:

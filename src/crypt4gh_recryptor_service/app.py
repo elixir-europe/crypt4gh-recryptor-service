@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 
+from crypt4gh_recryptor_service.cert import get_ssl_root_cert_path
 from crypt4gh_recryptor_service.config import Settings, VERSION
-from crypt4gh_recryptor_service.util import get_ssl_root_cert_path
 from fastapi import FastAPI
 import httpx
 from starlette.middleware.cors import CORSMiddleware
