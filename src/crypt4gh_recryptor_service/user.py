@@ -7,7 +7,7 @@ from crypt4gh_recryptor_service.models import (ComputeKeyInfoParams,
                                                ComputeKeyInfoResponse,
                                                UserRecryptParams,
                                                UserRecryptResponse)
-from crypt4gh_recryptor_service.storage import HashedBytesFile, HeaderFile
+from crypt4gh_recryptor_service.storage import HashedStrFile, HeaderFile
 from crypt4gh_recryptor_service.util import run_in_subprocess
 from fastapi import Depends, HTTPException, Request
 from pydantic import parse_obj_as
@@ -23,17 +23,10 @@ async def recrypt_header(params: UserRecryptParams,
                          settings: Annotated[UserSettings, Depends(get_user_settings)],
                          request: Request) -> UserRecryptResponse:
 
-    with open(settings.user_public_key_path, 'r') as user_public_key:
-        client = request.state.client
-        url = f'https://{settings.compute_host}:{settings.compute_port}/get_compute_key_info'
-        payload = ComputeKeyInfoParams(crypt4gh_user_public_key=user_public_key.read())
-        response = await client.post(url, json=payload.dict())
-        response.raise_for_status()
+    key_info = await _fetch_compute_key_info(request, settings)
 
-    key_info = parse_obj_as(ComputeKeyInfoResponse, response.json())
-
-    compute_key_file = HashedBytesFile(settings.compute_keys_dir,
-                                       key_info.crypt4gh_compute_public_key.encode('ascii'))
+    compute_key_file = HashedStrFile(settings.compute_keys_dir,
+                                     key_info.crypt4gh_compute_public_key)
     compute_key_file.write_to_storage()
 
     in_header_file = HeaderFile(settings.headers_dir, params.crypt4gh_header)
@@ -65,3 +58,14 @@ async def recrypt_header(params: UserRecryptParams,
         crypt4gh_compute_keypair_id=key_info.crypt4gh_compute_keypair_id,
         crypt4gh_compute_keypair_expiration_date=key_info.crypt4gh_compute_keypair_expiration_date,
     )
+
+
+async def _fetch_compute_key_info(request, settings):
+    with open(settings.user_public_key_path, 'r') as user_public_key:
+        client = request.state.client
+        url = f'https://{settings.compute_host}:{settings.compute_port}/get_compute_key_info'
+        payload = ComputeKeyInfoParams(crypt4gh_user_public_key=user_public_key.read())
+        response = await client.post(url, json=payload.dict())
+        response.raise_for_status()
+    key_info = parse_obj_as(ComputeKeyInfoResponse, response.json())
+    return key_info

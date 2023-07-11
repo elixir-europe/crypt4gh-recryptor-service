@@ -52,9 +52,20 @@ class HashedBytesFile(HashedFile[bytes]):
         return self._contents
 
 
+class HashedStrFile(HashedFile[str]):
+    @classmethod
+    def _to_bytes(cls, contents: str) -> bytes:
+        return contents.encode('utf8')
+
+    @property
+    def contents(self) -> str:
+        assert self._contents is not None
+        return self._contents.decode('utf8')
+
+
 class HeaderFile(HashedFile[str]):
     @classmethod
-    def _to_bytes(cls, contents: T) -> bytes:
+    def _to_bytes(cls, contents: str) -> bytes:
         return b64decode(contents)
 
     @property
