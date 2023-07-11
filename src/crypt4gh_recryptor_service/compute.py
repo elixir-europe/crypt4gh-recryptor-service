@@ -1,3 +1,4 @@
+import asyncio
 from typing import Annotated
 
 from crypt4gh_recryptor_service.app import app, common_info
@@ -18,6 +19,9 @@ async def get_compute_key_info(
     params: ComputeKeyInfoParams,
     settings: Annotated[ComputeSettings, Depends(get_compute_settings)],
 ) -> ComputeKeyInfoResponse:
+    lock = asyncio.Lock()
+    await lock.acquire()
+
     user_public_key_file = HashedStrFile(
         settings.user_keys_dir, params.crypt4gh_user_public_key, write_to_storage=True)
     compute_public_key_file = ComputeKeyFile(
@@ -52,9 +56,9 @@ async def get_compute_key_info(
     compute_public_key_file.read_from_storage()
     compute_private_key_file.read_from_storage()
 
-    print(compute_public_key_file.key_id)
-    print(compute_private_key_file.key_id)
     assert compute_public_key_file.key_id == compute_private_key_file.key_id
+
+    lock.release()
 
     return ComputeKeyInfoResponse(
         crypt4gh_compute_public_key=compute_public_key_file.contents,
