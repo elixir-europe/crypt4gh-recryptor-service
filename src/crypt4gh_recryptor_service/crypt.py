@@ -30,7 +30,9 @@ async def crypt4gh_recrypt_header(in_header_file: HeaderFile,
                 "decryptable by the user's private key") from e
         else:
             raise e
-    return out_header_file.read_from_storage()
+
+    out_header_file.read_from_storage()
+    return out_header_file
 
 
 def crypt4gh_generate_keypair(private_key, public_key, passphrase, comment, verbose: bool = False):
