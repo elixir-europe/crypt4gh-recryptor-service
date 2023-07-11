@@ -87,6 +87,7 @@ class ComputeKeyFile(HashedStrFile):
                  compute_key_id_prefix: str,
                  compute_key_expiration_delta_secs: int,
                  contents: Optional[str] = None,
+                 public: bool = True,
                  write_to_storage: bool = False):
         dir = dir.joinpath(user_public_key_file.path.name)
 
@@ -106,7 +107,10 @@ class ComputeKeyFile(HashedStrFile):
             ensure_dirs(exp_id_dir)
             key_id_dir = Path(tempfile.mkdtemp(prefix=compute_key_id_prefix, dir=exp_id_dir))
 
-        super().__init__(key_id_dir, contents, write_to_storage)
+        super().__init__(key_id_dir, contents, write_to_storage=False)
+        self._filename += '.pub' if public else '.priv'
+        if write_to_storage:
+            self.write_to_storage()
 
     @property
     def key_id(self) -> str:

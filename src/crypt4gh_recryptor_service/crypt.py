@@ -35,10 +35,14 @@ async def crypt4gh_recrypt_header(in_header_file: HeaderFile,
     return out_header_file
 
 
-def crypt4gh_generate_keypair(private_key, public_key, passphrase, comment, verbose: bool = False):
+def crypt4gh_generate_keypair(private_key_path: Path,
+                              public_key_path: Path,
+                              passphrase: str,
+                              comment: str,
+                              verbose: bool = False):
     run_in_subprocess(
         f'crypt4gh-recryptor generate-keypair'
-        f' --private {private_key}'
-        f' --public {public_key}' + (f' --passphrase "{passphrase}"' if passphrase else '') +
+        f' --private {private_key_path}'
+        f' --public {public_key_path}' + (f' --passphrase "{passphrase}"' if passphrase else '') +
         (f' --comment "{comment}"' if comment else ''),
         verbose=verbose)

@@ -32,8 +32,8 @@ def _setup_and_run(server_mode: ServerMode):
 
             private_key, public_key = keypair_paths
             crypt4gh_generate_keypair(
-                private_key,
-                public_key,
+                Path(private_key),
+                Path(public_key),
                 settings.private_key_passphrase,
                 settings.private_key_comment,
                 verbose=settings.dev_mode)
