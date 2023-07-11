@@ -48,6 +48,8 @@ async def get_compute_key_info(
             settings.private_key_comment,
             verbose=settings.dev_mode)
     elif existing_key_files == 1:
+        # TODO: Fix special case when key expires in between the checks of the public and private
+        #       keys. Suggestion: allow a couple of retries.
         raise Exception('Only one of the compute node public/private keypair files exists!'
                         f' Key id: {compute_public_key_file.key_id}')
     else:
