@@ -1,35 +1,9 @@
-from datetime import datetime
-from typing import Annotated, Union
+from typing import Annotated
 
 from crypt4gh_recryptor_service.app import app, common_info
 from crypt4gh_recryptor_service.config import ComputeSettings, get_compute_settings
-from crypt4gh_recryptor_service.validators import to_iso
+from crypt4gh_recryptor_service.models import ComputeKeyInfoParams, ComputeKeyInfoResponse
 from fastapi import Depends
-from pydantic import BaseModel, Field, validator
-
-
-class ComputeKeyInfoParams(BaseModel):
-    crypt4gh_user_public_key: str = Field(..., min_length=1)
-
-
-class ComputeKeyInfoResponse(BaseModel):
-    crypt4gh_compute_public_key: str = Field(..., min_length=1)
-    crypt4gh_compute_keypair_id: str = Field(..., min_length=1)
-    crypt4gh_compute_keypair_expiration_date: Union[datetime, str]
-
-    _to_iso = validator('crypt4gh_compute_keypair_expiration_date', allow_reuse=True)(to_iso)
-
-
-class ComputeRecryptParams(BaseModel):
-    crypt4gh_header: str = Field(..., min_length=1)
-
-
-class ComputeRecryptResponse(BaseModel):
-    crypt4gh_header: str = Field(..., min_length=1)
-    crypt4gh_compute_keypair_id: str = Field(..., min_length=1)
-    crypt4gh_compute_keypair_expiration_date: Union[datetime, str]
-
-    _to_iso = validator('crypt4gh_compute_keypair_expiration_date', allow_reuse=True)(to_iso)
 
 
 @app.get('/info')
