@@ -33,12 +33,21 @@ async def get_compute_key_info(
         settings.compute_key_expiration_delta_secs,
         public=False)
 
-    await crypt4gh_generate_keypair(
-        compute_private_key_file.path,
-        compute_public_key_file.path,
-        settings.private_key_passphrase,
-        settings.private_key_comment,
-        verbose=settings.dev_mode)
+    existing_key_files: int = sum(
+        1 for f in (compute_private_key_file, compute_public_key_file) if f.path.exists())
+
+    if existing_key_files == 0:
+        await crypt4gh_generate_keypair(
+            compute_private_key_file.path,
+            compute_public_key_file.path,
+            settings.private_key_passphrase,
+            settings.private_key_comment,
+            verbose=settings.dev_mode)
+    elif existing_key_files == 1:
+        raise Exception('Only one of the compute node public/private keypair files exists!'
+                        f' Key id: {compute_public_key_file.key_id}')
+    else:
+        assert existing_key_files == 2
 
     compute_public_key_file.read_from_storage()
     compute_private_key_file.read_from_storage()
