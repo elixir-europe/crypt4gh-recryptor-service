@@ -1,4 +1,5 @@
 import abc
+from datetime import timedelta
 from enum import Enum
 from functools import lru_cache
 import os
@@ -32,6 +33,8 @@ DEFAULT_USER_PRIVATE_KEY_FILE = 'user_key.priv'
 DEFAULT_USER_PUBLIC_KEY_FILE = 'user_key.pub'
 DEFAULT_COMPUTE_PRIVATE_KEY_FILE = 'compute_node_key.priv'
 DEFAULT_COMPUTE_PUBLIC_KEY_FILE = 'compute_node_key.pub'
+DEFAULT_COMPUTE_KEY_ID_PREFIX = 'cnk:'
+DEFAULT_COMPUTE_KEY_EXPIRATION_DELTA_SECS = int(timedelta(days=7).total_seconds())
 
 USER_KEYS_DIR = 'user_keys'
 COMPUTE_KEYS_DIR = 'compute_keys'
@@ -109,6 +112,10 @@ class Settings(BaseSettings):
         return _get_yml_config_file_path(self.working_dir)
 
     @property
+    def user_keys_dir(self) -> Path:
+        return Path(self.working_dir, USER_KEYS_DIR)
+
+    @property
     def compute_keys_dir(self) -> Path:
         return Path(self.working_dir, COMPUTE_KEYS_DIR)
 
@@ -142,10 +149,6 @@ class UserSettings(Settings):
         return _get_working_dir(ServerMode.USER)
 
     @property
-    def user_keys_dir(self) -> Path:
-        return Path(self.working_dir, USER_KEYS_DIR)
-
-    @property
     def user_private_key_path(self) -> Path:
         return Path(self.user_keys_dir, DEFAULT_USER_PRIVATE_KEY_FILE)
 
@@ -164,6 +167,8 @@ class UserSettings(Settings):
 class ComputeSettings(Settings):
     server_mode: ServerMode = ServerMode.COMPUTE
     port: int = DEFAULT_PORT_COMPUTE
+    compute_key_id_prefix: str = DEFAULT_COMPUTE_KEY_ID_PREFIX
+    compute_key_expiration_delta_secs: int = DEFAULT_COMPUTE_KEY_EXPIRATION_DELTA_SECS
 
     @property
     def working_dir(self) -> Path:
@@ -225,9 +230,7 @@ def setup_files(server_mode: ServerMode):
     yml_config_file_path = _get_yml_config_file_path(working_dir)
 
     ensure_dirs(working_dir)
-    if server_mode == ServerMode.USER:
-        ensure_dirs(Path(working_dir, USER_KEYS_DIR))
-
+    ensure_dirs(Path(working_dir, USER_KEYS_DIR))
     ensure_dirs(Path(working_dir, COMPUTE_KEYS_DIR))
     ensure_dirs(Path(working_dir, HEADERS_DIR))
     ensure_dirs(Path(working_dir, CERT_DIR))

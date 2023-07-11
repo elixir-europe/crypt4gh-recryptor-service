@@ -1,7 +1,7 @@
 from datetime import datetime
 
 
-def to_iso(cls, v):
+def to_iso(v):
     if isinstance(v, str):
-        v = datetime(v)
-    return v.isoformat(timespec='minutes')
+        v = datetime.fromisoformat(v)
+    return v.isoformat(timespec='seconds')

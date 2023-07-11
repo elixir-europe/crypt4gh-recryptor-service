@@ -1,9 +1,13 @@
 from abc import abstractmethod
 from base64 import b64decode, b64encode
+from datetime import datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
 import tempfile
 from typing import Generic, Optional, TypeVar
+
+from crypt4gh_recryptor_service.util import ensure_dirs
+from crypt4gh_recryptor_service.validators import to_iso
 
 T = TypeVar('T', bytes, str)
 
@@ -74,3 +78,40 @@ class HeaderFile(HashedFile[str]):
     def contents(self) -> str:
         assert self._contents is not None
         return b64encode(self._contents).decode('ascii')
+
+
+class ComputeKeyFile(HashedStrFile):
+    def __init__(self,
+                 dir: Path,
+                 user_public_key_file: HashedStrFile,
+                 compute_key_id_prefix: str,
+                 compute_key_expiration_delta_secs: int,
+                 contents: Optional[str] = None,
+                 write_to_storage: bool = False):
+        dir = dir.joinpath(user_public_key_file.path.name)
+
+        key_id_dir = None
+        if dir.exists():
+            for exp_date_dir in dir.iterdir():
+                exp_date = datetime.fromisoformat(exp_date_dir.name)
+                if exp_date > datetime.now():
+                    for key_id_dir in exp_date_dir.iterdir():
+                        break
+                    break
+
+        if not key_id_dir:
+            exp_date_str = to_iso(datetime.now()
+                                  + timedelta(seconds=compute_key_expiration_delta_secs))
+            exp_id_dir = dir.joinpath(exp_date_str)
+            ensure_dirs(exp_id_dir)
+            key_id_dir = Path(tempfile.mkdtemp(prefix=compute_key_id_prefix, dir=exp_id_dir))
+
+        super().__init__(key_id_dir, contents, write_to_storage)
+
+    @property
+    def key_id(self) -> str:
+        return self.path.parent.name
+
+    @property
+    def expiration_date(self) -> str:
+        return self.path.parent.parent.name
