@@ -16,12 +16,14 @@ def setup_localhost_ssl_cert(settings):
     run_in_subprocess('mkcert -install', verbose=True)
     certfile_path = settings.localhost_certfile_path
     keyfile_path = settings.localhost_keyfile_path
+
     if not (certfile_path.exists() and keyfile_path.exists()):
         run_in_subprocess(
             f'mkcert -cert-file {certfile_path} '
             f'-key-file {keyfile_path} '
             f'{LOCALHOST}',
             verbose=True)
+
     certfile_path.chmod(mode=0o600)
     keyfile_path.chmod(mode=0o600)
     return certfile_path, keyfile_path
@@ -30,5 +32,4 @@ def setup_localhost_ssl_cert(settings):
 def get_ssl_root_cert_path() -> Path:
     results = run_in_subprocess('mkcert -CAROOT', verbose=True, capture_output=True)
     path = Path(results.stdout.strip(), 'rootCA.pem')
-    print(path)
     return path
