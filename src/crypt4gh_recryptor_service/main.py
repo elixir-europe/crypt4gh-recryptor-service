@@ -1,15 +1,14 @@
 from pathlib import Path
 from typing import cast
 
-from crypt4gh_recryptor_service.cert import (generate_keypair,
-                                             generate_uvicorn_ssl_cert_options,
+from crypt4gh_recryptor_service.cert import (generate_uvicorn_ssl_cert_options,
                                              setup_localhost_ssl_cert)
 from crypt4gh_recryptor_service.config import (get_settings,
                                                LOCALHOST,
                                                ServerMode,
                                                setup_files,
                                                UserSettings)
-from crypt4gh_recryptor_service.util import run_in_subprocess
+from crypt4gh_recryptor_service.util import generate_keypair, run_in_subprocess
 import typer
 
 app = typer.Typer()
