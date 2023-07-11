@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 from typing import cast
 
@@ -31,19 +32,20 @@ def _setup_and_run(server_mode: ServerMode):
             print('User key pair files do not exist. Generating new keypair...')
 
             private_key, public_key = keypair_paths
-            crypt4gh_generate_keypair(
-                Path(private_key),
-                Path(public_key),
-                settings.private_key_passphrase,
-                settings.private_key_comment,
-                verbose=settings.dev_mode)
+            asyncio.run(
+                crypt4gh_generate_keypair(
+                    Path(private_key),
+                    Path(public_key),
+                    settings.private_key_passphrase,
+                    settings.private_key_comment,
+                    verbose=settings.dev_mode))
         for key_path in keypair_paths:
             if not key_path.exists():
                 raise ValueError(f'User key file "{key_path}" is missing!')
 
     run_in_subprocess(
         f'uvicorn --host {settings.host} --port {settings.port} '
-        f'{uvicorn_ssl_options}{"--reload " if settings.dev_mode else ""}'
+        f'{uvicorn_ssl_options}{"--reload " if settings.dev_mode else "--workers 4 "}'
         f'--app-dir {Path(__file__).parent} {server_mode.value}:app',
         verbose=settings.dev_mode)
 

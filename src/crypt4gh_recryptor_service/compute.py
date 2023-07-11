@@ -33,7 +33,7 @@ async def get_compute_key_info(
         settings.compute_key_expiration_delta_secs,
         public=False)
 
-    crypt4gh_generate_keypair(
+    await crypt4gh_generate_keypair(
         compute_private_key_file.path,
         compute_public_key_file.path,
         settings.private_key_passphrase,
