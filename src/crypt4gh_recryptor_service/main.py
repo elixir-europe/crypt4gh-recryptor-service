@@ -8,7 +8,8 @@ from crypt4gh_recryptor_service.config import (get_settings,
                                                ServerMode,
                                                setup_files,
                                                UserSettings)
-from crypt4gh_recryptor_service.util import generate_keypair, run_in_subprocess
+from crypt4gh_recryptor_service.crypt import crypt4gh_generate_keypair
+from crypt4gh_recryptor_service.util import run_in_subprocess
 import typer
 
 app = typer.Typer()
@@ -30,7 +31,7 @@ def _setup_and_run(server_mode: ServerMode):
             print('User key pair files do not exist. Generating new keypair...')
 
             private_key, public_key = keypair_paths
-            generate_keypair(
+            crypt4gh_generate_keypair(
                 private_key,
                 public_key,
                 settings.private_key_passphrase,

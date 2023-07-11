@@ -9,10 +9,12 @@ T = TypeVar('T', bytes, str)
 
 
 class HashedFile(Generic[T]):
-    def __init__(self, dir: Path, contents: Optional[T] = None):
+    def __init__(self, dir: Path, contents: Optional[T] = None, write_to_storage: bool = False):
         self._dir: Path = dir
         self._contents: Optional[bytes] = self._to_bytes(contents) if contents else None
         self._filename: str = self.sha256 if self._contents else tempfile.mktemp(dir=self._dir)
+        if write_to_storage:
+            self.write_to_storage()
 
     @classmethod
     def _to_bytes(cls, contents: T) -> bytes:

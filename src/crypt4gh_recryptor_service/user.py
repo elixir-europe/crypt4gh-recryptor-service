@@ -1,16 +1,12 @@
-from subprocess import CalledProcessError
 from typing import Annotated
 
 from crypt4gh_recryptor_service.app import app, common_info
 from crypt4gh_recryptor_service.config import get_user_settings, UserSettings
-from crypt4gh_recryptor_service.models import (ComputeKeyInfoParams,
-                                               ComputeKeyInfoResponse,
-                                               UserRecryptParams,
-                                               UserRecryptResponse)
+from crypt4gh_recryptor_service.crypt import crypt4gh_recrypt_header
+from crypt4gh_recryptor_service.exchange import fetch_compute_key_info
+from crypt4gh_recryptor_service.models import UserRecryptParams, UserRecryptResponse
 from crypt4gh_recryptor_service.storage import HashedStrFile, HeaderFile
-from crypt4gh_recryptor_service.util import run_in_subprocess
-from fastapi import Depends, HTTPException, Request
-from pydantic import parse_obj_as
+from fastapi import Depends, Request
 
 
 @app.get('/info')
@@ -23,49 +19,27 @@ async def recrypt_header(params: UserRecryptParams,
                          settings: Annotated[UserSettings, Depends(get_user_settings)],
                          request: Request) -> UserRecryptResponse:
 
-    key_info = await _fetch_compute_key_info(request, settings)
+    key_info = await fetch_compute_key_info(request, settings)
 
-    compute_key_file = HashedStrFile(settings.compute_keys_dir,
-                                     key_info.crypt4gh_compute_public_key)
-    compute_key_file.write_to_storage()
+    in_header_file = HeaderFile(
+        settings.headers_dir,
+        params.crypt4gh_header,
+        write_to_storage=True,
+    )
+    compute_public_key_file = HashedStrFile(
+        settings.compute_keys_dir,
+        key_info.crypt4gh_compute_public_key,
+        write_to_storage=True,
+    )
 
-    in_header_file = HeaderFile(settings.headers_dir, params.crypt4gh_header)
-    in_header_file.write_to_storage()
-    out_header_file = HeaderFile(settings.headers_dir)
-
-    try:
-        run_in_subprocess(
-            f'crypt4gh-recryptor recrypt '
-            f'--encryption-key {compute_key_file.path} '
-            f'-i {in_header_file.path} '
-            f'-o {out_header_file.path} '
-            f'--decryption-key {settings.user_private_key_path}',
-            verbose=settings.dev_mode)
-    except CalledProcessError as e:
-        if e.returncode == 1:
-            raise HTTPException(
-                status_code=406,
-                detail='The key header was not able to decode the header. '
-                'Please make sure that the encrypted header is '
-                "decryptable by the user's private key") from e
-        else:
-            raise e
-
-    out_header_file.read_from_storage()
+    out_header_file = await crypt4gh_recrypt_header(
+        in_header_file,
+        compute_public_key_file,
+        settings.user_private_key_path,
+        verbose=settings.dev_mode)
 
     return UserRecryptResponse(
         crypt4gh_header=out_header_file.contents,
         crypt4gh_compute_keypair_id=key_info.crypt4gh_compute_keypair_id,
         crypt4gh_compute_keypair_expiration_date=key_info.crypt4gh_compute_keypair_expiration_date,
     )
-
-
-async def _fetch_compute_key_info(request, settings):
-    with open(settings.user_public_key_path, 'r') as user_public_key:
-        client = request.state.client
-        url = f'https://{settings.compute_host}:{settings.compute_port}/get_compute_key_info'
-        payload = ComputeKeyInfoParams(crypt4gh_user_public_key=user_public_key.read())
-        response = await client.post(url, json=payload.dict())
-        response.raise_for_status()
-    key_info = parse_obj_as(ComputeKeyInfoResponse, response.json())
-    return key_info
