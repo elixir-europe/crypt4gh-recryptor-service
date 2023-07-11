@@ -13,10 +13,20 @@ T = TypeVar('T', bytes, str)
 
 
 class HashedFile(Generic[T]):
-    def __init__(self, dir: Path, contents: Optional[T] = None, write_to_storage: bool = False):
+    def __init__(self,
+                 dir: Path,
+                 contents: Optional[T] = None,
+                 filename: Optional[str] = None,
+                 write_to_storage: bool = False):
         self._dir: Path = dir
         self._contents: Optional[bytes] = self._to_bytes(contents) if contents else None
-        self._filename: str = self.sha256 if self._contents else tempfile.mktemp(dir=self._dir)
+
+        self._rename_to_hash = False if filename else True
+
+        if not filename:
+            filename = self.sha256 if self._contents else tempfile.mktemp(dir=self._dir)
+        self._filename = filename
+
         if write_to_storage:
             self.write_to_storage()
 
@@ -47,7 +57,7 @@ class HashedFile(Generic[T]):
     def read_from_storage(self):
         with open(self.path, 'rb') as hashed_file:
             self._contents = hashed_file.read()
-            if self._filename != self.sha256:
+            if self._rename_to_hash and self._filename != self.sha256:
                 self.path.rename(self._dir.joinpath(self.sha256))
 
 
@@ -107,10 +117,8 @@ class ComputeKeyFile(HashedStrFile):
             ensure_dirs(exp_id_dir)
             key_id_dir = Path(tempfile.mkdtemp(prefix=compute_key_id_prefix, dir=exp_id_dir))
 
-        super().__init__(key_id_dir, contents, write_to_storage=False)
-        self._filename += '.pub' if public else '.priv'
-        if write_to_storage:
-            self.write_to_storage()
+        filename = key_id_dir.name + ('.pub' if public else '.priv')
+        super().__init__(key_id_dir, contents, filename=filename, write_to_storage=write_to_storage)
 
     @property
     def key_id(self) -> str:
