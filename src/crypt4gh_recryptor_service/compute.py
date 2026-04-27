@@ -4,9 +4,12 @@ from typing import Annotated
 from crypt4gh_recryptor_service.app import app, common_info
 from crypt4gh_recryptor_service.config import ComputeSettings, get_compute_settings
 from crypt4gh_recryptor_service.crypt import crypt4gh_generate_keypair
-from crypt4gh_recryptor_service.models import ComputeKeyInfoParams, ComputeKeyInfoResponse
-from crypt4gh_recryptor_service.storage import ComputeKeyFile, HashedStrFile
-from fastapi import Depends
+from crypt4gh_recryptor_service.models import (ComputeKeyInfoParams,
+                                               ComputeKeyInfoResponse,
+                                               ComputeRecryptParams,
+                                               ComputeRecryptResponse)
+from crypt4gh_recryptor_service.storage import ComputeKeyFile, HashedStrFile, HeaderFile
+from fastapi import Depends, Request
 
 
 @app.get('/info')
@@ -78,3 +81,53 @@ async def get_compute_key_info(
 #         crypt4gh_compute_keypair_id='cn:b38ac81f',
 #         crypt4gh_compute_keypair_expiration_date='2023-06-30T12:15',
 #     )
+
+
+@app.post('/recrypt_header')
+async def recrypt_header(params: ComputeRecryptParams,
+                         settings: Annotated[ComputeSettings, Depends(get_compute_settings)],
+                         request: Request) -> ComputeRecryptResponse:
+    lock = asyncio.Lock()
+    await lock.acquire()
+
+    # key_info = await fetch_compute_key_info(request, settings)
+
+    in_header_file = HeaderFile(
+        settings.headers_dir,
+        params.crypt4gh_header,
+        write_to_storage=True,
+    )
+
+    compute_public_key_file = ComputeKeyFile(
+        settings.compute_keys_dir,
+        user_public_key_file,
+        settings.compute_key_id_prefix,
+        settings.compute_key_expiration_delta_secs,
+        public=True)
+
+    compute_private_key_file = ComputeKeyFile(
+        settings.compute_keys_dir,
+        user_public_key_file,
+        settings.compute_key_id_prefix,
+        settings.compute_key_expiration_delta_secs,
+        public=False)
+
+    user_public_key_file = HashedStrFile(
+        settings.compute_keys_dir,
+        key_info.crypt4gh_compute_public_key,
+        write_to_storage=True,
+    )
+
+    out_header_file = await crypt4gh_recrypt_header(
+        in_header_file,
+        compute_public_key_file,
+        settings.user_private_key_path,
+        verbose=settings.dev_mode)
+
+    lock.release()
+
+    return ComputeRecryptResponse(
+        crypt4gh_header=out_header_file.contents,
+        crypt4gh_compute_keypair_id=key_info.crypt4gh_compute_keypair_id,
+        crypt4gh_compute_keypair_expiration_date=key_info.crypt4gh_compute_keypair_expiration_date,
+    )

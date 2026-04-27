@@ -28,9 +28,9 @@ class ComputeKeyInfoResponse(ComputeKeyInfo):
     crypt4gh_compute_public_key: str = Field(..., min_length=1)
 
 
-# class ComputeRecryptParams(BaseModel):
-#     crypt4gh_header: str = Field(..., min_length=1)
-#
-#
-# class ComputeRecryptResponse(ComputeKeyInfo):
-#     crypt4gh_header: str = Field(..., min_length=1)
+class ComputeRecryptParams(BaseModel):
+    crypt4gh_header: str = Field(..., min_length=1)
+
+
+class ComputeRecryptResponse(ComputeKeyInfo):
+    crypt4gh_header: str = Field(..., min_length=1)
