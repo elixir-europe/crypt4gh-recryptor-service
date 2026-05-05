@@ -2,13 +2,8 @@ import asyncio
 from pathlib import Path
 from typing import cast
 
-from crypt4gh_recryptor_service.cert import (generate_uvicorn_ssl_cert_options,
-                                             setup_localhost_ssl_cert)
-from crypt4gh_recryptor_service.config import (get_settings,
-                                               LOCALHOST,
-                                               ServerMode,
-                                               setup_files,
-                                               UserSettings)
+from crypt4gh_recryptor_service.cert import generate_uvicorn_ssl_cert_options, setup_ssl_cert
+from crypt4gh_recryptor_service.config import get_settings, ServerMode, setup_files, UserSettings
 from crypt4gh_recryptor_service.crypt import crypt4gh_generate_keypair
 from crypt4gh_recryptor_service.util import run_in_subprocess
 import typer
@@ -20,8 +15,8 @@ def _setup_and_run(server_mode: ServerMode):
     setup_files(server_mode)
     settings = get_settings(server_mode)
 
-    if settings.host == LOCALHOST:
-        setup_localhost_ssl_cert(settings)
+    if settings.use_https:
+        setup_ssl_cert(settings)
 
     uvicorn_ssl_options = generate_uvicorn_ssl_cert_options(settings)
 
