@@ -1,16 +1,20 @@
 from contextlib import asynccontextmanager
+import ssl
 
-from crypt4gh_recryptor_service.cert import get_ssl_root_cert_path
 from crypt4gh_recryptor_service.config import Settings, VERSION
 from fastapi import FastAPI
 import httpx
 from starlette.middleware.cors import CORSMiddleware
+import truststore
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Use the truststore of the local OS
+    ctx = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+
     # Initialise the Client on startup and add it to the state
-    async with httpx.AsyncClient(verify=str(get_ssl_root_cert_path())) as client:
+    async with httpx.AsyncClient(verify=ctx) as client:
         yield {'client': client}
         # The Client closes on shutdown
 

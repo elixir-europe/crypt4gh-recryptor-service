@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from crypt4gh_recryptor_service.util import run_in_subprocess
 
 
@@ -26,9 +24,3 @@ def setup_ssl_cert(settings):
     certfile_path.chmod(mode=0o600)
     keyfile_path.chmod(mode=0o600)
     return certfile_path, keyfile_path
-
-
-def get_ssl_root_cert_path() -> Path:
-    results = run_in_subprocess('mkcert -CAROOT', verbose=True, capture_output=True)
-    path = Path(results.stdout.strip(), 'rootCA.pem')
-    return path
