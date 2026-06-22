@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 from crypt4gh_recryptor_service.storage import HeaderFile
 from crypt4gh_recryptor_service.util import async_run_in_subprocess
@@ -20,7 +21,9 @@ async def crypt4gh_recrypt_header(in_header_file: HeaderFile,
             f'-o {out_header_file.path} '
             f'--decryption-key {decryption_key_path}',
             verbose=verbose)
-    except Exception as e:
+    except RuntimeError as e:
+        if re.search(r'exited with\s+1\]', str(e)) is None:
+            raise
         raise HTTPException(status_code=422, detail='Malformed or undecryptable crypt4gh_header') from e
 
     out_header_file.read_from_storage()

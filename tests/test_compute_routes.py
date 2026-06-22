@@ -1,15 +1,21 @@
+import asyncio
 import base64
 from datetime import datetime, timedelta
 from hashlib import sha256
 import json
 from pathlib import Path
+import subprocess
 from types import SimpleNamespace
 
+import crypt4gh_recryptor_service.crypt as crypt_module
 import crypt4gh_recryptor_service.compute as compute_module
 import pytest
 from crypt4gh_recryptor_service.app import app
 from crypt4gh_recryptor_service.config import ComputeSettings, ServerMode, get_compute_settings, setup_files
+from crypt4gh_recryptor_service.storage import ComputeKeyFile
+from crypt4gh_recryptor_service.storage import HeaderFile
 from crypt4gh_recryptor_service.util import ensure_dirs
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 
@@ -171,6 +177,37 @@ def test_recrypt_header_to_user_key_deletes_stale_index_entry(configured_client)
     assert not index_path.exists()
 
 
+def test_recrypt_header_to_user_key_rejects_path_traversal_key_id(configured_client):
+    client, settings = configured_client
+    key_id = "cnk:../../escape"
+    victim_file = settings.compute_keys_dir.joinpath("escape.json")
+    victim_file.write_text("{}")
+    assert victim_file.exists()
+
+    response = client.post(
+        "/recrypt_header_to_user_key",
+        json={
+            "crypt4gh_header": VALID_HEADER,
+            "crypt4gh_compute_keypair_id": key_id,
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Unknown crypt4gh_compute_keypair_id"}
+
+    assert victim_file.exists()
+
+
+def test_delete_index_entry_ignores_invalid_key_id_path_traversal(configured_client):
+    _client, settings = configured_client
+    victim_file = settings.compute_keys_dir.joinpath("escape.json")
+    victim_file.write_text("{}")
+
+    ComputeKeyFile.delete_index_entry(settings.compute_keys_dir, "cnk:../../escape")
+
+    assert victim_file.exists()
+
+
 def test_recrypt_header_to_job_key_returns_expected_contract(configured_client, fake_recrypt_header):
     client, _settings = configured_client
     user_public_key = "-----BEGIN CRYPT4GH PUBLIC KEY-----\nuser-key\n-----END CRYPT4GH PUBLIC KEY-----"
@@ -193,6 +230,71 @@ def test_recrypt_header_to_job_key_returns_expected_contract(configured_client, 
         "crypt4gh_compute_keypair_expiration_date"
     ]
     assert payload["crypt4gh_compute_public_key"] == key_info["crypt4gh_compute_public_key"]
+
+
+def test_recrypt_header_to_job_key_returns_500_when_recrypt_runtime_fails(
+    configured_client,
+    monkeypatch,
+):
+    client, _settings = configured_client
+    user_public_key = "-----BEGIN CRYPT4GH PUBLIC KEY-----\nuser-key\n-----END CRYPT4GH PUBLIC KEY-----"
+    key_info = _issue_compute_key(client, user_public_key)
+
+    async def _boom(*_args, **_kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(compute_module, "crypt4gh_recrypt_header", _boom)
+
+    with pytest.raises(RuntimeError):
+        client.post(
+            "/recrypt_header_to_job_key",
+            json={
+                "crypt4gh_header": VALID_HEADER,
+                "crypt4gh_compute_keypair_id": key_info["crypt4gh_compute_keypair_id"],
+                "crypt4gh_job_public_key": "-----BEGIN CRYPT4GH PUBLIC KEY-----\njob-key\n-----END CRYPT4GH PUBLIC KEY-----",
+            },
+        )
+
+
+def test_crypt4gh_recrypt_header_maps_decode_failures_to_422(tmp_path, monkeypatch):
+    in_header_file = HeaderFile(tmp_path, VALID_HEADER, write_to_storage=True)
+
+    async def _fail_decode(*_args, **_kwargs):
+        raise RuntimeError("['crypt4gh-recryptor recrypt' exited with 1]")
+
+    monkeypatch.setattr(crypt_module, "async_run_in_subprocess", _fail_decode)
+
+    with pytest.raises(HTTPException) as excinfo:
+        asyncio.run(
+            crypt_module.crypt4gh_recrypt_header(
+                in_header_file,
+                tmp_path.joinpath("decryption.key"),
+                tmp_path.joinpath("encryption.key"),
+                verbose=False,
+            )
+        )
+
+    assert excinfo.value.status_code == 422
+    assert excinfo.value.detail == "Malformed or undecryptable crypt4gh_header"
+
+
+def test_crypt4gh_recrypt_header_does_not_mask_unexpected_runtime_errors(tmp_path, monkeypatch):
+    in_header_file = HeaderFile(tmp_path, VALID_HEADER, write_to_storage=True)
+
+    async def _runtime_failure(*_args, **_kwargs):
+        raise RuntimeError("subprocess unavailable")
+
+    monkeypatch.setattr(crypt_module, "async_run_in_subprocess", _runtime_failure)
+
+    with pytest.raises(RuntimeError, match="subprocess unavailable"):
+        asyncio.run(
+            crypt_module.crypt4gh_recrypt_header(
+                in_header_file,
+                tmp_path.joinpath("decryption.key"),
+                tmp_path.joinpath("encryption.key"),
+                verbose=False,
+            )
+        )
 
 
 def test_recrypt_header_to_job_key_returns_404_for_unknown_key_id(configured_client):

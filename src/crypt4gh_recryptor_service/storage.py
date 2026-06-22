@@ -93,6 +93,8 @@ class HeaderFile(HashedFile[str]):
 
 
 class ComputeKeyFile(HashedStrFile):
+    KEY_ID_ALLOWLIST = r'^[A-Za-z0-9:_-]+$'
+
     def __init__(self,
                  dir: Path,
                  user_public_key_file: HashedStrFile,
@@ -144,7 +146,14 @@ class ComputeKeyFile(HashedStrFile):
         return key_id_suffix[:2] if len(key_id_suffix) >= 2 else (key_id_suffix or '__')
 
     @classmethod
+    def is_valid_key_id(cls, key_id: str) -> bool:
+        from re import fullmatch
+        return bool(fullmatch(cls.KEY_ID_ALLOWLIST, key_id))
+
+    @classmethod
     def index_path(cls, compute_keys_dir: Path, key_id: str) -> Path:
+        if not cls.is_valid_key_id(key_id):
+            raise ValueError('Invalid compute key id format')
         return cls.index_dir(compute_keys_dir).joinpath(cls._index_shard(key_id), f'{key_id}.json')
 
     @classmethod
@@ -153,6 +162,8 @@ class ComputeKeyFile(HashedStrFile):
                           key_id: str,
                           user_hash: str,
                           expiration: str) -> None:
+        if not cls.is_valid_key_id(key_id):
+            return
         index_path = cls.index_path(compute_keys_dir, key_id)
         ensure_dirs(index_path.parent)
 
@@ -164,6 +175,8 @@ class ComputeKeyFile(HashedStrFile):
 
     @classmethod
     def delete_index_entry(cls, compute_keys_dir: Path, key_id: str) -> None:
+        if not cls.is_valid_key_id(key_id):
+            return
         index_path = cls.index_path(compute_keys_dir, key_id)
         if index_path.exists():
             index_path.unlink()
@@ -189,6 +202,9 @@ class ComputeKeyFile(HashedStrFile):
             cls,
             compute_keys_dir: Path,
             key_id: str) -> Optional[tuple[str, str, bool, Path, Path]]:
+        if not cls.is_valid_key_id(key_id):
+            return None
+
         index_path = cls.index_path(compute_keys_dir, key_id)
         now = datetime.now()
 
