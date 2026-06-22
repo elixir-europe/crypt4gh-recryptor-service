@@ -2,6 +2,7 @@ from abc import abstractmethod
 from base64 import b64decode, b64encode
 from datetime import datetime, timedelta
 from hashlib import sha256
+import json
 from pathlib import Path
 import tempfile
 from typing import Generic, Optional, TypeVar
@@ -129,60 +130,174 @@ class ComputeKeyFile(HashedStrFile):
     def expiration_date(self) -> str:
         return self.path.parent.parent.name
 
+    @property
+    def user_hash(self) -> str:
+        return self.path.parent.parent.parent.name
+
+    @classmethod
+    def index_dir(cls, compute_keys_dir: Path) -> Path:
+        return compute_keys_dir.joinpath('index')
+
+    @classmethod
+    def _index_shard(cls, key_id: str) -> str:
+        key_id_suffix = key_id.split(':', 1)[1] if ':' in key_id else key_id
+        return key_id_suffix[:2] if len(key_id_suffix) >= 2 else (key_id_suffix or '__')
+
+    @classmethod
+    def index_path(cls, compute_keys_dir: Path, key_id: str) -> Path:
+        return cls.index_dir(compute_keys_dir).joinpath(cls._index_shard(key_id), f'{key_id}.json')
+
+    @classmethod
+    def write_index_entry(cls,
+                          compute_keys_dir: Path,
+                          key_id: str,
+                          user_hash: str,
+                          expiration: str) -> None:
+        index_path = cls.index_path(compute_keys_dir, key_id)
+        ensure_dirs(index_path.parent)
+
+        tmp_path = index_path.with_suffix(index_path.suffix + '.tmp')
+        payload = {'user_hash': user_hash, 'expiration': expiration}
+        with open(tmp_path, 'w') as index_file:
+            json.dump(payload, index_file)
+        tmp_path.replace(index_path)
+
+    @classmethod
+    def delete_index_entry(cls, compute_keys_dir: Path, key_id: str) -> None:
+        index_path = cls.index_path(compute_keys_dir, key_id)
+        if index_path.exists():
+            index_path.unlink()
+
+    @classmethod
+    def _resolve_paths_from_metadata(cls,
+                                     compute_keys_dir: Path,
+                                     key_id: str,
+                                     user_hash: str,
+                                     expiration: str) -> Optional[tuple[Path, Path]]:
+        key_dir = compute_keys_dir.joinpath(user_hash, expiration, key_id)
+        if not key_dir.is_dir():
+            return None
+        public_key_path = key_dir.joinpath(f'{key_id}.pub')
+        private_key_path = key_dir.joinpath(f'{key_id}.priv')
+        if not (public_key_path.exists() and private_key_path.exists()):
+            return None
+
+        return public_key_path, private_key_path
+
+    @classmethod
+    def lookup_by_key_id(
+            cls,
+            compute_keys_dir: Path,
+            key_id: str) -> Optional[tuple[str, str, bool, Path, Path]]:
+        index_path = cls.index_path(compute_keys_dir, key_id)
+        now = datetime.now()
+
+        if index_path.exists():
+            try:
+                with open(index_path, 'r') as index_file:
+                    metadata = json.load(index_file)
+                user_hash = metadata['user_hash']
+                expiration = metadata['expiration']
+                resolved_paths = cls._resolve_paths_from_metadata(
+                    compute_keys_dir,
+                    key_id,
+                    user_hash,
+                    expiration,
+                )
+                if resolved_paths is not None:
+                    expiration_date = datetime.fromisoformat(expiration)
+                    compute_public_key_path, compute_private_key_path = resolved_paths
+                    return (
+                        user_hash,
+                        expiration,
+                        expiration_date <= now,
+                        compute_public_key_path,
+                        compute_private_key_path,
+                    )
+            except (KeyError, ValueError, json.JSONDecodeError):
+                pass
+
+            cls.delete_index_entry(compute_keys_dir, key_id)
+
+        if not compute_keys_dir.exists():
+            return None
+
+        expired_key_data = None
+        for user_hash_dir in compute_keys_dir.iterdir():
+            if not user_hash_dir.is_dir() or user_hash_dir.name == 'index':
+                continue
+
+            for expiration_dir in user_hash_dir.iterdir():
+                if not expiration_dir.is_dir():
+                    continue
+
+                try:
+                    expiration_date = datetime.fromisoformat(expiration_dir.name)
+                except ValueError:
+                    continue
+
+                resolved_paths = cls._resolve_paths_from_metadata(
+                    compute_keys_dir,
+                    key_id,
+                    user_hash_dir.name,
+                    expiration_dir.name,
+                )
+                if resolved_paths is None:
+                    continue
+
+                compute_public_key_path, compute_private_key_path = resolved_paths
+
+                cls.write_index_entry(
+                    compute_keys_dir,
+                    key_id,
+                    user_hash_dir.name,
+                    expiration_dir.name,
+                )
+
+                if expiration_date > now:
+                    return (
+                        user_hash_dir.name,
+                        expiration_dir.name,
+                        False,
+                        compute_public_key_path,
+                        compute_private_key_path,
+                    )
+
+                expired_key_data = (
+                    user_hash_dir.name,
+                    expiration_dir.name,
+                    True,
+                    compute_public_key_path,
+                    compute_private_key_path,
+                )
+
+        return expired_key_data
+
 
 def resolve_compute_keypair(
     compute_keys_dir: Path,
     user_keys_dir: Path,
     key_id: str,
 ) -> Optional[ResolvedComputeKeypair]:
-    if not compute_keys_dir.exists():
+    key_data = ComputeKeyFile.lookup_by_key_id(compute_keys_dir, key_id)
+    if key_data is None:
         return None
 
-    expired_keypair = None
-    now = datetime.now()
+    user_hash, expiration, is_expired, compute_public_key_path, compute_private_key_path = key_data
 
-    for user_hash_dir in compute_keys_dir.iterdir():
-        if not user_hash_dir.is_dir():
-            continue
+    user_public_key_path = user_keys_dir.joinpath(user_hash)
+    if not user_public_key_path.exists():
+        ComputeKeyFile.delete_index_entry(compute_keys_dir, key_id)
+        return None
 
-        user_public_key_path = user_keys_dir.joinpath(user_hash_dir.name)
-        if not user_public_key_path.exists():
-            continue
-
-        for expiration_dir in user_hash_dir.iterdir():
-            if not expiration_dir.is_dir():
-                continue
-
-            key_dir = expiration_dir.joinpath(key_id)
-            if not key_dir.is_dir():
-                continue
-
-            compute_public_key_path = key_dir.joinpath(f'{key_id}.pub')
-            compute_private_key_path = key_dir.joinpath(f'{key_id}.priv')
-            if not (compute_public_key_path.exists() and compute_private_key_path.exists()):
-                continue
-
-            try:
-                expiration_datetime = datetime.fromisoformat(expiration_dir.name)
-            except ValueError:
-                continue
-
-            key_info = ComputeKeyInfo(
-                compute_keypair_id=key_id,
-                compute_keypair_expiration_date=expiration_dir.name,
-            )
-            is_expired = expiration_datetime <= now
-            keypair = ResolvedComputeKeypair(
-                key_info=key_info,
-                is_expired=is_expired,
-                compute_public_key_path=compute_public_key_path,
-                compute_private_key_path=compute_private_key_path,
-                user_public_key_path=user_public_key_path,
-            )
-
-            if not is_expired:
-                return keypair
-
-            expired_keypair = keypair
-
-    return expired_keypair
+    key_info = ComputeKeyInfo(
+        compute_keypair_id=key_id,
+        compute_keypair_expiration_date=expiration,
+    )
+    return ResolvedComputeKeypair(
+        key_info=key_info,
+        is_expired=is_expired,
+        compute_public_key_path=compute_public_key_path,
+        compute_private_key_path=compute_private_key_path,
+        user_public_key_path=user_public_key_path,
+    )

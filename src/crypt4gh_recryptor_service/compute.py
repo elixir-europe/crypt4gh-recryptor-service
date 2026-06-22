@@ -68,6 +68,13 @@ async def get_compute_key_info(
 
         assert compute_public_key_file.key_id == compute_private_key_file.key_id
 
+        ComputeKeyFile.write_index_entry(
+            settings.compute_keys_dir,
+            compute_public_key_file.key_id,
+            compute_public_key_file.user_hash,
+            compute_public_key_file.expiration_date,
+        )
+
         return ComputeKeyInfoResponse(
             compute_public_key=compute_public_key_file.contents,
             compute_keypair_id=compute_public_key_file.key_id,

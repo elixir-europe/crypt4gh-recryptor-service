@@ -1,6 +1,7 @@
 import base64
 from datetime import datetime, timedelta
 from hashlib import sha256
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -14,6 +15,12 @@ from fastapi.testclient import TestClient
 
 VALID_HEADER = base64.b64encode(b"header-bytes").decode("ascii")
 RECRYPTED_HEADER = base64.b64encode(b"rewritten-header").decode("ascii")
+
+
+def _compute_key_index_path(settings: ComputeSettings, key_id: str) -> Path:
+    key_id_suffix = key_id.split(":", 1)[1] if ":" in key_id else key_id
+    shard = key_id_suffix[:2] if len(key_id_suffix) >= 2 else (key_id_suffix or "__")
+    return settings.compute_keys_dir.joinpath("index", shard, f"{key_id}.json")
 
 
 def _create_expired_keypair(settings: ComputeSettings, user_public_key: str, key_id: str) -> None:
@@ -98,6 +105,70 @@ def test_get_compute_key_info_reuses_keypair_and_persists_hashed_user_key(config
     user_hash = sha256(user_public_key.encode("utf8")).hexdigest()
     assert settings.user_keys_dir.joinpath(user_hash).exists()
     assert settings.compute_keys_dir.joinpath(user_hash).exists()
+
+
+def test_get_compute_key_info_persists_key_id_index(configured_client):
+    client, settings = configured_client
+    user_public_key = "-----BEGIN CRYPT4GH PUBLIC KEY-----\nuser-key\n-----END CRYPT4GH PUBLIC KEY-----"
+
+    key_info = _issue_compute_key(client, user_public_key)
+    key_id = key_info["crypt4gh_compute_keypair_id"]
+    index_path = _compute_key_index_path(settings, key_id)
+    user_hash = sha256(user_public_key.encode("utf8")).hexdigest()
+
+    assert index_path.exists()
+    assert json.loads(index_path.read_text()) == {
+        "user_hash": user_hash,
+        "expiration": key_info["crypt4gh_compute_keypair_expiration_date"],
+    }
+
+
+def test_recrypt_header_to_user_key_backfills_key_id_index(configured_client, fake_recrypt_header):
+    client, settings = configured_client
+    user_public_key = "-----BEGIN CRYPT4GH PUBLIC KEY-----\nuser-key\n-----END CRYPT4GH PUBLIC KEY-----"
+    key_info = _issue_compute_key(client, user_public_key)
+    key_id = key_info["crypt4gh_compute_keypair_id"]
+    index_path = _compute_key_index_path(settings, key_id)
+
+    assert index_path.exists()
+    index_path.unlink()
+    assert not index_path.exists()
+
+    response = client.post(
+        "/recrypt_header_to_user_key",
+        json={
+            "crypt4gh_header": VALID_HEADER,
+            "crypt4gh_compute_keypair_id": key_id,
+        },
+    )
+
+    assert response.status_code == 200
+    assert index_path.exists()
+
+
+def test_recrypt_header_to_user_key_deletes_stale_index_entry(configured_client):
+    client, settings = configured_client
+    key_id = "cnk:stale"
+    index_path = _compute_key_index_path(settings, key_id)
+    ensure_dirs(index_path.parent)
+    index_path.write_text(
+        json.dumps({
+            "user_hash": "deadbeef",
+            "expiration": "2099-01-01T00:00:00",
+        })
+    )
+    assert index_path.exists()
+
+    response = client.post(
+        "/recrypt_header_to_user_key",
+        json={
+            "crypt4gh_header": VALID_HEADER,
+            "crypt4gh_compute_keypair_id": key_id,
+        },
+    )
+
+    assert response.status_code == 404
+    assert not index_path.exists()
 
 
 def test_recrypt_header_to_job_key_returns_expected_contract(configured_client, fake_recrypt_header):
