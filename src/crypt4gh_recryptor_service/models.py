@@ -28,9 +28,20 @@ class ComputeKeyInfoResponse(ComputeKeyInfo):
     crypt4gh_compute_public_key: str = Field(..., min_length=1)
 
 
-# class ComputeRecryptParams(BaseModel):
-#     crypt4gh_header: str = Field(..., min_length=1)
-#
-#
-# class ComputeRecryptResponse(ComputeKeyInfo):
-#     crypt4gh_header: str = Field(..., min_length=1)
+class ComputeRecryptHeaderToJobKeyParams(BaseModel):
+    crypt4gh_header: str = Field(..., min_length=1)
+    crypt4gh_compute_keypair_id: str = Field(..., min_length=1)
+    crypt4gh_job_public_key: str = Field(..., min_length=1)
+
+
+class ComputeRecryptHeaderToJobKeyResponse(ComputeKeyInfoResponse):
+    crypt4gh_header: str = Field(..., min_length=1)
+
+
+class ComputeRecryptHeaderToUserKeyParams(BaseModel):
+    crypt4gh_header: str = Field(..., min_length=1)
+    crypt4gh_compute_keypair_id: str = Field(..., min_length=1)
+
+
+class ComputeRecryptHeaderToUserKeyResponse(ComputeKeyInfo):
+    crypt4gh_header: str = Field(..., min_length=1)
