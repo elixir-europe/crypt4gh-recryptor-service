@@ -23,12 +23,12 @@ async def recrypt_header(params: UserRecryptParams,
 
     in_header_file = HeaderFile(
         settings.headers_dir,
-        params.crypt4gh_header,
+        params.header,
         write_to_storage=True,
     )
     compute_public_key_file = HashedStrFile(
         settings.compute_keys_dir,
-        key_info.crypt4gh_compute_public_key,
+        key_info.compute_public_key,
         write_to_storage=True,
     )
 
@@ -39,7 +39,7 @@ async def recrypt_header(params: UserRecryptParams,
         verbose=settings.dev_mode)
 
     return UserRecryptResponse(
-        crypt4gh_header=out_header_file.contents,
-        crypt4gh_compute_keypair_id=key_info.crypt4gh_compute_keypair_id,
-        crypt4gh_compute_keypair_expiration_date=key_info.crypt4gh_compute_keypair_expiration_date,
+        header=out_header_file.contents,
+        compute_keypair_id=key_info.compute_keypair_id,
+        compute_keypair_expiration_date=key_info.compute_keypair_expiration_date,
     )

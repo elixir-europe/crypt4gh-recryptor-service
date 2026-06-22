@@ -1,12 +1,12 @@
 from abc import abstractmethod
 from base64 import b64decode, b64encode
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
 import tempfile
 from typing import Generic, Optional, TypeVar
 
+from crypt4gh_recryptor_service.models import ComputeKeyInfo, ResolvedComputeKeypair
 from crypt4gh_recryptor_service.util import ensure_dirs
 from crypt4gh_recryptor_service.validators import to_iso
 
@@ -130,16 +130,6 @@ class ComputeKeyFile(HashedStrFile):
         return self.path.parent.parent.name
 
 
-@dataclass
-class ResolvedComputeKeypair:
-    key_id: str
-    expiration_date: str
-    is_expired: bool
-    compute_public_key_path: Path
-    compute_private_key_path: Path
-    user_public_key_path: Path
-
-
 def resolve_compute_keypair(
     compute_keys_dir: Path,
     user_keys_dir: Path,
@@ -177,16 +167,20 @@ def resolve_compute_keypair(
             except ValueError:
                 continue
 
+            key_info = ComputeKeyInfo(
+                compute_keypair_id=key_id,
+                compute_keypair_expiration_date=expiration_dir.name,
+            )
+            is_expired = expiration_datetime <= now
             keypair = ResolvedComputeKeypair(
-                key_id=key_id,
-                expiration_date=expiration_dir.name,
-                is_expired=expiration_datetime <= now,
+                key_info=key_info,
+                is_expired=is_expired,
                 compute_public_key_path=compute_public_key_path,
                 compute_private_key_path=compute_private_key_path,
                 user_public_key_path=user_public_key_path,
             )
 
-            if not keypair.is_expired:
+            if not is_expired:
                 return keypair
 
             expired_keypair = keypair

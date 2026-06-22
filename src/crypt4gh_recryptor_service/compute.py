@@ -9,9 +9,10 @@ from crypt4gh_recryptor_service.models import (ComputeKeyInfoParams, ComputeKeyI
                                                ComputeRecryptHeaderToJobKeyParams,
                                                ComputeRecryptHeaderToJobKeyResponse,
                                                ComputeRecryptHeaderToUserKeyParams,
-                                               ComputeRecryptHeaderToUserKeyResponse)
+                                               ComputeRecryptHeaderToUserKeyResponse,
+                                               ResolvedComputeKeypair)
 from crypt4gh_recryptor_service.storage import (ComputeKeyFile, HashedStrFile, HeaderFile,
-                                                ResolvedComputeKeypair, resolve_compute_keypair)
+                                                resolve_compute_keypair)
 from fastapi import Depends, HTTPException
 
 
@@ -30,7 +31,7 @@ async def get_compute_key_info(
 ) -> ComputeKeyInfoResponse:
     async with _compute_key_lock:
         user_public_key_file = HashedStrFile(
-            settings.user_keys_dir, params.crypt4gh_user_public_key, write_to_storage=True)
+            settings.user_keys_dir, params.user_public_key, write_to_storage=True)
         compute_public_key_file = ComputeKeyFile(
             settings.compute_keys_dir,
             user_public_key_file,
@@ -68,9 +69,9 @@ async def get_compute_key_info(
         assert compute_public_key_file.key_id == compute_private_key_file.key_id
 
         return ComputeKeyInfoResponse(
-            crypt4gh_compute_public_key=compute_public_key_file.contents,
-            crypt4gh_compute_keypair_id=compute_public_key_file.key_id,
-            crypt4gh_compute_keypair_expiration_date=compute_public_key_file.expiration_date,
+            compute_public_key=compute_public_key_file.contents,
+            compute_keypair_id=compute_public_key_file.key_id,
+            compute_keypair_expiration_date=compute_public_key_file.expiration_date,
         )
 
 
@@ -96,10 +97,11 @@ async def recrypt_header_to_job_key(
     params: ComputeRecryptHeaderToJobKeyParams,
     settings: Annotated[ComputeSettings, Depends(get_compute_settings)],
 ) -> ComputeRecryptHeaderToJobKeyResponse:
-    keypair = _resolve_compute_keypair_or_raise(params.crypt4gh_compute_keypair_id, settings)
-    in_header_file = _header_file_from_payload(settings, params.crypt4gh_header)
+    keypair = _resolve_compute_keypair_or_raise(
+        params.compute_keypair_id, settings)
+    in_header_file = _header_file_from_payload(settings, params.header)
     job_public_key_file = HashedStrFile(
-        settings.compute_keys_dir, params.crypt4gh_job_public_key, write_to_storage=True)
+        settings.compute_keys_dir, params.job_public_key, write_to_storage=True)
 
     out_header_file = await crypt4gh_recrypt_header(
         in_header_file,
@@ -108,10 +110,10 @@ async def recrypt_header_to_job_key(
         verbose=settings.dev_mode)
 
     return ComputeRecryptHeaderToJobKeyResponse(
-        crypt4gh_header=out_header_file.contents,
-        crypt4gh_compute_public_key=keypair.compute_public_key_path.read_text(),
-        crypt4gh_compute_keypair_id=keypair.key_id,
-        crypt4gh_compute_keypair_expiration_date=keypair.expiration_date,
+        header=out_header_file.contents,
+        compute_public_key=keypair.compute_public_key_path.read_text(),
+        compute_keypair_id=keypair.key_info.compute_keypair_id,
+        compute_keypair_expiration_date=keypair.key_info.compute_keypair_expiration_date,
     )
 
 
@@ -120,8 +122,9 @@ async def recrypt_header_to_user_key(
     params: ComputeRecryptHeaderToUserKeyParams,
     settings: Annotated[ComputeSettings, Depends(get_compute_settings)],
 ) -> ComputeRecryptHeaderToUserKeyResponse:
-    keypair = _resolve_compute_keypair_or_raise(params.crypt4gh_compute_keypair_id, settings)
-    in_header_file = _header_file_from_payload(settings, params.crypt4gh_header)
+    keypair = _resolve_compute_keypair_or_raise(
+        params.compute_keypair_id, settings)
+    in_header_file = _header_file_from_payload(settings, params.header)
 
     out_header_file = await crypt4gh_recrypt_header(
         in_header_file,
@@ -130,9 +133,9 @@ async def recrypt_header_to_user_key(
         verbose=settings.dev_mode)
 
     return ComputeRecryptHeaderToUserKeyResponse(
-        crypt4gh_header=out_header_file.contents,
-        crypt4gh_compute_keypair_id=keypair.key_id,
-        crypt4gh_compute_keypair_expiration_date=keypair.expiration_date,
+        header=out_header_file.contents,
+        compute_keypair_id=keypair.key_info.compute_keypair_id,
+        compute_keypair_expiration_date=keypair.key_info.compute_keypair_expiration_date,
     )
 
 
