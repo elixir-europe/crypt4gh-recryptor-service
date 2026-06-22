@@ -34,8 +34,8 @@ async def recrypt_header(params: UserRecryptParams,
 
     out_header_file = await crypt4gh_recrypt_header(
         in_header_file,
-        compute_public_key_file,
         settings.user_private_key_path,
+        compute_public_key_file.path,
         verbose=settings.dev_mode)
 
     return UserRecryptResponse(

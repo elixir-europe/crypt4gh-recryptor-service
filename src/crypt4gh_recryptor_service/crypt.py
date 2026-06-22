@@ -1,14 +1,13 @@
 from pathlib import Path
-from subprocess import CalledProcessError
 
-from crypt4gh_recryptor_service.storage import HashedStrFile, HeaderFile
+from crypt4gh_recryptor_service.storage import HeaderFile
 from crypt4gh_recryptor_service.util import async_run_in_subprocess
 from fastapi import HTTPException
 
 
 async def crypt4gh_recrypt_header(in_header_file: HeaderFile,
-                                  compute_key_file: HashedStrFile,
-                                  user_private_key_path: Path,
+                                  decryption_key_path: Path,
+                                  encryption_key_path: Path,
                                   verbose: bool):
     headers_dir = in_header_file.path.parent
     out_header_file = HeaderFile(headers_dir)
@@ -16,20 +15,13 @@ async def crypt4gh_recrypt_header(in_header_file: HeaderFile,
     try:
         await async_run_in_subprocess(
             f'crypt4gh-recryptor recrypt '
-            f'--encryption-key {compute_key_file.path} '
+            f'--encryption-key {encryption_key_path} '
             f'-i {in_header_file.path} '
             f'-o {out_header_file.path} '
-            f'--decryption-key {user_private_key_path}',
+            f'--decryption-key {decryption_key_path}',
             verbose=verbose)
-    except CalledProcessError as e:
-        if e.returncode == 1:
-            raise HTTPException(
-                status_code=406,
-                detail='The key header was not able to decode the header. '
-                'Please make sure that the encrypted header is '
-                "decryptable by the user's private key") from e
-        else:
-            raise e
+    except Exception as e:
+        raise HTTPException(status_code=422, detail='Malformed or undecryptable crypt4gh_header') from e
 
     out_header_file.read_from_storage()
     return out_header_file

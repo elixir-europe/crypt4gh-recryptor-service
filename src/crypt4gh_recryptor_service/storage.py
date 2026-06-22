@@ -1,5 +1,6 @@
 from abc import abstractmethod
 from base64 import b64decode, b64encode
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
@@ -127,3 +128,67 @@ class ComputeKeyFile(HashedStrFile):
     @property
     def expiration_date(self) -> str:
         return self.path.parent.parent.name
+
+
+@dataclass
+class ResolvedComputeKeypair:
+    key_id: str
+    expiration_date: str
+    is_expired: bool
+    compute_public_key_path: Path
+    compute_private_key_path: Path
+    user_public_key_path: Path
+
+
+def resolve_compute_keypair(
+    compute_keys_dir: Path,
+    user_keys_dir: Path,
+    key_id: str,
+) -> Optional[ResolvedComputeKeypair]:
+    if not compute_keys_dir.exists():
+        return None
+
+    expired_keypair = None
+    now = datetime.now()
+
+    for user_hash_dir in compute_keys_dir.iterdir():
+        if not user_hash_dir.is_dir():
+            continue
+
+        user_public_key_path = user_keys_dir.joinpath(user_hash_dir.name)
+        if not user_public_key_path.exists():
+            continue
+
+        for expiration_dir in user_hash_dir.iterdir():
+            if not expiration_dir.is_dir():
+                continue
+
+            key_dir = expiration_dir.joinpath(key_id)
+            if not key_dir.is_dir():
+                continue
+
+            compute_public_key_path = key_dir.joinpath(f'{key_id}.pub')
+            compute_private_key_path = key_dir.joinpath(f'{key_id}.priv')
+            if not (compute_public_key_path.exists() and compute_private_key_path.exists()):
+                continue
+
+            try:
+                expiration_datetime = datetime.fromisoformat(expiration_dir.name)
+            except ValueError:
+                continue
+
+            keypair = ResolvedComputeKeypair(
+                key_id=key_id,
+                expiration_date=expiration_dir.name,
+                is_expired=expiration_datetime <= now,
+                compute_public_key_path=compute_public_key_path,
+                compute_private_key_path=compute_private_key_path,
+                user_public_key_path=user_public_key_path,
+            )
+
+            if not keypair.is_expired:
+                return keypair
+
+            expired_keypair = keypair
+
+    return expired_keypair
