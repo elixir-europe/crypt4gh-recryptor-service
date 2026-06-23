@@ -115,8 +115,8 @@ class ComputeKeyFile(HashedStrFile):
                     break
 
         if not key_id_dir:
-            exp_date_str = to_iso(datetime.now(timezone.utc)
-                                  + timedelta(seconds=compute_key_expiration_delta_secs))
+            exp_date_str = to_iso(
+                datetime.now(timezone.utc) + timedelta(seconds=compute_key_expiration_delta_secs))
             exp_id_dir = dir.joinpath(exp_date_str)
             ensure_dirs(exp_id_dir)
             key_id_dir = Path(tempfile.mkdtemp(prefix=compute_key_id_prefix, dir=exp_id_dir))
@@ -157,10 +157,7 @@ class ComputeKeyFile(HashedStrFile):
         return cls.index_dir(compute_keys_dir).joinpath(cls._index_shard(key_id), f'{key_id}.json')
 
     @classmethod
-    def write_index_entry(cls,
-                          compute_keys_dir: Path,
-                          key_id: str,
-                          user_hash: str,
+    def write_index_entry(cls, compute_keys_dir: Path, key_id: str, user_hash: str,
                           expiration: str) -> None:
         if not cls.is_valid_key_id(key_id):
             return
@@ -198,9 +195,8 @@ class ComputeKeyFile(HashedStrFile):
         return public_key_path, private_key_path
 
     @classmethod
-    def lookup_by_key_id(
-            cls,
-            compute_keys_dir: Path,
+    def lookup_by_key_id(  # noqa: C901
+            cls, compute_keys_dir: Path,
             key_id: str) -> Optional[tuple[str, str, bool, Path, Path]]:
         if not cls.is_valid_key_id(key_id):
             return None
