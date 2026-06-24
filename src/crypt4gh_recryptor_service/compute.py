@@ -114,6 +114,7 @@ async def recrypt_header_to_job_key(
         in_header_file,
         keypair.compute_private_key_path,
         job_public_key_file.path,
+        decryption_passphrase=settings.private_key_passphrase,
         verbose=settings.dev_mode)
 
     return ComputeRecryptHeaderToJobKeyResponse(
@@ -137,6 +138,7 @@ async def recrypt_header_to_user_key(
         in_header_file,
         keypair.compute_private_key_path,
         keypair.user_public_key_path,
+        decryption_passphrase=settings.private_key_passphrase,
         verbose=settings.dev_mode)
 
     return ComputeRecryptHeaderToUserKeyResponse(

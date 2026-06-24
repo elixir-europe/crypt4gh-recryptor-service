@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from base64 import b64decode, b64encode
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import json
 from pathlib import Path
@@ -9,7 +9,7 @@ from typing import Generic, Optional, TypeVar
 
 from crypt4gh_recryptor_service.models import ComputeKeyInfo, ResolvedComputeKeypair
 from crypt4gh_recryptor_service.util import ensure_dirs
-from crypt4gh_recryptor_service.validators import to_iso
+from crypt4gh_recryptor_service.validators import parse_iso_datetime, to_iso
 
 T = TypeVar('T', bytes, str)
 
@@ -108,14 +108,14 @@ class ComputeKeyFile(HashedStrFile):
         key_id_dir = None
         if dir.exists():
             for exp_date_dir in dir.iterdir():
-                exp_date = datetime.fromisoformat(exp_date_dir.name)
-                if exp_date > datetime.now():
+                exp_date = parse_iso_datetime(exp_date_dir.name)
+                if exp_date > datetime.now(timezone.utc):
                     for key_id_dir in exp_date_dir.iterdir():
                         break
                     break
 
         if not key_id_dir:
-            exp_date_str = to_iso(datetime.now()
+            exp_date_str = to_iso(datetime.now(timezone.utc)
                                   + timedelta(seconds=compute_key_expiration_delta_secs))
             exp_id_dir = dir.joinpath(exp_date_str)
             ensure_dirs(exp_id_dir)
@@ -206,7 +206,7 @@ class ComputeKeyFile(HashedStrFile):
             return None
 
         index_path = cls.index_path(compute_keys_dir, key_id)
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
 
         if index_path.exists():
             try:
@@ -221,7 +221,7 @@ class ComputeKeyFile(HashedStrFile):
                     expiration,
                 )
                 if resolved_paths is not None:
-                    expiration_date = datetime.fromisoformat(expiration)
+                    expiration_date = parse_iso_datetime(expiration)
                     compute_public_key_path, compute_private_key_path = resolved_paths
                     return (
                         user_hash,
@@ -248,7 +248,7 @@ class ComputeKeyFile(HashedStrFile):
                     continue
 
                 try:
-                    expiration_date = datetime.fromisoformat(expiration_dir.name)
+                    expiration_date = parse_iso_datetime(expiration_dir.name)
                 except ValueError:
                     continue
 

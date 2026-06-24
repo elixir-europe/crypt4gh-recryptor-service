@@ -9,7 +9,8 @@ from fastapi import HTTPException
 async def crypt4gh_recrypt_header(in_header_file: HeaderFile,
                                   decryption_key_path: Path,
                                   encryption_key_path: Path,
-                                  verbose: bool):
+                                  decryption_passphrase: str | None = None,
+                                  verbose: bool = False):
     headers_dir = in_header_file.path.parent
     out_header_file = HeaderFile(headers_dir)
 
@@ -19,7 +20,8 @@ async def crypt4gh_recrypt_header(in_header_file: HeaderFile,
             f'--encryption-key {encryption_key_path} '
             f'-i {in_header_file.path} '
             f'-o {out_header_file.path} '
-            f'--decryption-key {decryption_key_path}',
+            f'--decryption-key {decryption_key_path}'
+            + (f' --decryption-passphrase "{decryption_passphrase}"' if decryption_passphrase else ''),
             verbose=verbose)
     except RuntimeError as e:
         if re.search(r'exited with\s+1\]', str(e)) is None:

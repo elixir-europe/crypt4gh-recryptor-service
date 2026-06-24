@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from hashlib import sha256
 import json
 from pathlib import Path
+import shlex
 import subprocess
 from types import SimpleNamespace
 
@@ -74,7 +75,10 @@ def fake_recrypt_header(monkeypatch):
         _decryption_key_path,
         _encryption_key_path,
         verbose: bool,
+        decryption_passphrase: str | None = None,
     ):
+        if decryption_passphrase:
+            pass
         if verbose:
             pass
         return SimpleNamespace(contents=RECRYPTED_HEADER)
@@ -127,6 +131,17 @@ def test_get_compute_key_info_persists_key_id_index(configured_client):
         "user_hash": user_hash,
         "expiration": key_info["crypt4gh_compute_keypair_expiration_date"],
     }
+
+
+def test_get_compute_key_info_returns_timezone_aware_expiration(configured_client):
+    client, _settings = configured_client
+    user_public_key = "-----BEGIN CRYPT4GH PUBLIC KEY-----\nuser-key\n-----END CRYPT4GH PUBLIC KEY-----"
+
+    key_info = _issue_compute_key(client, user_public_key)
+    expiration = datetime.fromisoformat(key_info["crypt4gh_compute_keypair_expiration_date"])
+
+    assert expiration.tzinfo is not None
+    assert expiration.utcoffset() is not None
 
 
 def test_recrypt_header_to_user_key_backfills_key_id_index(configured_client, fake_recrypt_header):
@@ -295,6 +310,34 @@ def test_crypt4gh_recrypt_header_does_not_mask_unexpected_runtime_errors(tmp_pat
                 verbose=False,
             )
         )
+
+
+def test_crypt4gh_recrypt_header_passes_decryption_passphrase_to_subprocess(tmp_path, monkeypatch):
+    in_header_file = HeaderFile(tmp_path, VALID_HEADER, write_to_storage=True)
+    captured_cmd = ""
+
+    async def _capture_cmd(cmd: str, verbose: bool):
+        nonlocal captured_cmd
+        captured_cmd = cmd
+        parts = shlex.split(cmd)
+        output_path = Path(parts[parts.index("-o") + 1])
+        output_path.write_bytes(b"stub-header")
+        if verbose:
+            pass
+
+    monkeypatch.setattr(crypt_module, "async_run_in_subprocess", _capture_cmd)
+
+    asyncio.run(
+        crypt_module.crypt4gh_recrypt_header(
+            in_header_file,
+            tmp_path.joinpath("decryption.key"),
+            tmp_path.joinpath("encryption.key"),
+            decryption_passphrase="secret-passphrase",
+            verbose=False,
+        )
+    )
+
+    assert "--decryption-passphrase \"secret-passphrase\"" in captured_cmd
 
 
 def test_recrypt_header_to_job_key_returns_404_for_unknown_key_id(configured_client):
