@@ -143,12 +143,14 @@ def test_get_compute_key_info_persists_key_id_index(configured_client, user_publ
     }
 
 
-def test_get_compute_key_info_returns_timezone_aware_expiration(configured_client):
+def test_get_compute_key_info_returns_timezone_aware_expiration(
+    configured_client,
+    user_public_key,
+):
     client, _settings = configured_client
-    user_public_key = "-----BEGIN CRYPT4GH PUBLIC KEY-----\nuser-key\n-----END CRYPT4GH PUBLIC KEY-----"
 
     key_info = _issue_compute_key(client, user_public_key)
-    expiration = datetime.fromisoformat(key_info["crypt4gh_compute_keypair_expiration_date"])
+    expiration = datetime.fromisoformat(key_info['crypt4gh_compute_keypair_expiration_date'])
 
     assert expiration.tzinfo is not None
     assert expiration.utcoffset() is not None
@@ -328,30 +330,29 @@ def test_crypt4gh_recrypt_header_does_not_mask_unexpected_runtime_errors(tmp_pat
 
 def test_crypt4gh_recrypt_header_passes_decryption_passphrase_to_subprocess(tmp_path, monkeypatch):
     in_header_file = HeaderFile(tmp_path, VALID_HEADER, write_to_storage=True)
-    captured_cmd = ""
+    captured_cmd = ''
 
     async def _capture_cmd(cmd: str, verbose: bool):
         nonlocal captured_cmd
         captured_cmd = cmd
         parts = shlex.split(cmd)
-        output_path = Path(parts[parts.index("-o") + 1])
-        output_path.write_bytes(b"stub-header")
+        output_path = Path(parts[parts.index('-o') + 1])
+        output_path.write_bytes(b'stub-header')
         if verbose:
             pass
 
-    monkeypatch.setattr(crypt_module, "async_run_in_subprocess", _capture_cmd)
+    monkeypatch.setattr(crypt_module, 'async_run_in_subprocess', _capture_cmd)
 
     asyncio.run(
         crypt_module.crypt4gh_recrypt_header(
             in_header_file,
-            tmp_path.joinpath("decryption.key"),
-            tmp_path.joinpath("encryption.key"),
-            decryption_passphrase="secret-passphrase",
+            tmp_path.joinpath('decryption.key'),
+            tmp_path.joinpath('encryption.key'),
+            decryption_passphrase='secret-passphrase',
             verbose=False,
-        )
-    )
+        ))
 
-    assert "--decryption-passphrase \"secret-passphrase\"" in captured_cmd
+    assert '--decryption-passphrase "secret-passphrase"' in captured_cmd
 
 
 def test_recrypt_header_to_job_key_returns_404_for_unknown_key_id(

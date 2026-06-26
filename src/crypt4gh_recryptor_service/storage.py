@@ -21,6 +21,7 @@ T = TypeVar('T')
 INDEX_DIR_NAME = 'index'
 KEY_ID_ALLOWLIST = r'^[a-z0-9_]+$'
 
+
 def is_valid_compute_key_id(key_id: str) -> bool:
     key_id_allowlist = rf'^{DEFAULT_COMPUTE_KEY_ID_PREFIX}[a-z0-9_]+$'
     return bool(re.fullmatch(key_id_allowlist, key_id))
