@@ -42,6 +42,7 @@ COMPUTE_KEYS_DIR = 'compute_keys'
 HEADERS_DIR = 'headers'
 CERT_DIR = 'certs'
 
+
 class ServerMode(str, Enum):
     USER = 'user'
     COMPUTE = 'compute'
@@ -199,9 +200,9 @@ def get_settings(server_mode: ServerMode) -> Union[UserSettings, ComputeSettings
 
 
 def get_store_env_settings_callable(
-        env_settings_func: C4ghSettingsSourceCallable,
-        dotenv_settings_func: C4ghSettingsSourceCallable,
-        settings_cls: type[Settings],
+    env_settings_func: C4ghSettingsSourceCallable,
+    dotenv_settings_func: C4ghSettingsSourceCallable,
+    settings_cls: type[Settings],
 ) -> C4ghSettingsSourceCallable:
     def store_env_settings() -> dict[str, Any]:
         dotenv_settings = dotenv_settings_func()
