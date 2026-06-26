@@ -10,7 +10,7 @@ async def crypt4gh_recrypt_header(in_header_file: HeaderFile,
                                   decryption_key_path: Path,
                                   encryption_key_path: Path,
                                   decryption_passphrase: str | None = None,
-                                  verbose: bool = False):
+                                  verbose: bool = False,):
     headers_dir = in_header_file.path.parent
     out_header_file = HeaderFile(headers_dir)
 
@@ -26,7 +26,8 @@ async def crypt4gh_recrypt_header(in_header_file: HeaderFile,
     except RuntimeError as e:
         if re.search(r'exited with\s+1\]', str(e)) is None:
             raise
-        raise HTTPException(status_code=422, detail='Malformed or undecryptable crypt4gh_header') from e
+        raise HTTPException(
+            status_code=422, detail='Malformed or undecryptable crypt4gh_header') from e
 
     out_header_file.read_from_storage()
     return out_header_file

@@ -1,17 +1,43 @@
 from abc import abstractmethod
 from base64 import b64decode, b64encode
+from binascii import Error as BinasciiError
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import json
 from pathlib import Path
+import re
 import tempfile
-from typing import Generic, Optional, TypeVar
+from typing import Generic, Mapping, Optional, TypeVar
 
-from crypt4gh_recryptor_service.models import ComputeKeyInfo, ResolvedComputeKeypair
+from crypt4gh_recryptor_service.config import (ComputeSettings,
+                                               DEFAULT_COMPUTE_KEY_ID_PREFIX,
+                                               Settings)
 from crypt4gh_recryptor_service.util import ensure_dirs
 from crypt4gh_recryptor_service.validators import parse_iso_datetime, to_iso
+from fastapi import HTTPException
 
-T = TypeVar('T', bytes, str)
+T = TypeVar('T')
+
+INDEX_DIR_NAME = 'index'
+KEY_ID_ALLOWLIST = r'^[a-z0-9_]+$'
+
+def is_valid_compute_key_id(key_id: str) -> bool:
+    key_id_allowlist = rf'^{DEFAULT_COMPUTE_KEY_ID_PREFIX}[a-z0-9_]+$'
+    return bool(re.fullmatch(key_id_allowlist, key_id))
+
+
+def ensure_datetime(expiration_date: str | datetime) -> datetime:
+    if isinstance(expiration_date, str):
+        return parse_iso_datetime(expiration_date)
+    return expiration_date
+
+
+def timestamp_is_expired_or_near_expiry(
+    settings: ComputeSettings,
+    expiration_date: datetime | str,
+) -> bool:
+    return ensure_datetime(expiration_date) - datetime.now(timezone.utc) < timedelta(
+        seconds=settings.compute_key_min_expiration_delta_req)
 
 
 class HashedFile(Generic[T]):
@@ -20,13 +46,13 @@ class HashedFile(Generic[T]):
                  contents: Optional[T] = None,
                  filename: Optional[str] = None,
                  write_to_storage: bool = False):
-        self._dir: Path = dir
+        self.dir: Path = dir
         self._contents: Optional[bytes] = self._to_bytes(contents) if contents else None
 
         self._rename_to_hash = False if filename else True
 
         if not filename:
-            filename = self.sha256 if self._contents else tempfile.mktemp(dir=self._dir)
+            filename = self._content_sha256() if self._contents else tempfile.mktemp(dir=self.dir)
         self._filename = filename
 
         if write_to_storage:
@@ -42,13 +68,13 @@ class HashedFile(Generic[T]):
     def contents(self) -> T:
         ...
 
-    @property
-    def sha256(self):
+    def _content_sha256(self) -> str:
+        assert self._contents is not None
         return sha256(self._contents).hexdigest()
 
     @property
     def path(self) -> Path:
-        return self._dir.joinpath(self._filename)
+        return self.dir.joinpath(self._filename)
 
     def write_to_storage(self):
         assert self._contents is not None
@@ -59,8 +85,8 @@ class HashedFile(Generic[T]):
     def read_from_storage(self):
         with open(self.path, 'rb') as hashed_file:
             self._contents = hashed_file.read()
-            if self._rename_to_hash and self._filename != self.sha256:
-                self.path.rename(self._dir.joinpath(self.sha256))
+            if self._rename_to_hash and self._filename != self._content_sha256():
+                self.path.rename(self.dir.joinpath(self._content_sha256()))
 
 
 class HashedBytesFile(HashedFile[bytes]):
@@ -84,7 +110,10 @@ class HashedStrFile(HashedFile[str]):
 class HeaderFile(HashedFile[str]):
     @classmethod
     def _to_bytes(cls, contents: str) -> bytes:
-        return b64decode(contents)
+        try:
+            return b64decode(contents)
+        except ValueError as e:
+            raise ValueError('Malformed or undecryptable crypt4gh_header') from e
 
     @property
     def contents(self) -> str:
@@ -93,40 +122,20 @@ class HeaderFile(HashedFile[str]):
 
 
 class ComputeKeyFile(HashedStrFile):
-    KEY_ID_ALLOWLIST = r'^[A-Za-z0-9:_-]+$'
-
     def __init__(self,
-                 dir: Path,
-                 user_public_key_file: HashedStrFile,
-                 compute_key_id_prefix: str,
-                 compute_key_expiration_delta_secs: int,
+                 key_id_dir: Path,
                  contents: Optional[str] = None,
                  public: bool = True,
                  write_to_storage: bool = False):
-        dir = dir.joinpath(user_public_key_file.path.name)
-
-        key_id_dir = None
-        if dir.exists():
-            for exp_date_dir in dir.iterdir():
-                exp_date = parse_iso_datetime(exp_date_dir.name)
-                if exp_date > datetime.now(timezone.utc):
-                    for key_id_dir in exp_date_dir.iterdir():
-                        break
-                    break
-
-        if not key_id_dir:
-            exp_date_str = to_iso(
-                datetime.now(timezone.utc) + timedelta(seconds=compute_key_expiration_delta_secs))
-            exp_id_dir = dir.joinpath(exp_date_str)
-            ensure_dirs(exp_id_dir)
-            key_id_dir = Path(tempfile.mkdtemp(prefix=compute_key_id_prefix, dir=exp_id_dir))
 
         filename = key_id_dir.name + ('.pub' if public else '.priv')
         super().__init__(key_id_dir, contents, filename=filename, write_to_storage=write_to_storage)
 
     @property
     def key_id(self) -> str:
-        return self.path.parent.name
+        key_id = self.path.parent.name
+        assert is_valid_compute_key_id(key_id)
+        return key_id
 
     @property
     def expiration_date(self) -> str:
@@ -136,107 +145,46 @@ class ComputeKeyFile(HashedStrFile):
     def user_hash(self) -> str:
         return self.path.parent.parent.parent.name
 
-    @classmethod
-    def index_dir(cls, compute_keys_dir: Path) -> Path:
-        return compute_keys_dir.joinpath('index')
+
+class ComputeKeypairFiles:
+    def __init__(
+        self,
+        key_id_dir: Path,
+        write_to_storage: bool = False,
+    ) -> None:
+        self.public_key_file = ComputeKeyFile(
+            key_id_dir, public=True, write_to_storage=write_to_storage)
+        self.private_key_file = ComputeKeyFile(
+            key_id_dir, public=False, write_to_storage=write_to_storage)
 
     @classmethod
-    def _index_shard(cls, key_id: str) -> str:
-        key_id_suffix = key_id.split(':', 1)[1] if ':' in key_id else key_id
-        return key_id_suffix[:2] if len(key_id_suffix) >= 2 else (key_id_suffix or '__')
+    def lookup_last_exp_key_id_dir_or_create_new(
+        cls,
+        settings: ComputeSettings,
+        user_public_key_hash: str,
+    ) -> Path:
+        key_id_dir = None
+
+        key_dir = settings.compute_keys_dir.joinpath(user_public_key_hash)
+        if key_dir.exists():
+            key_id_dir = cls._get_last_non_expired_key_id_dir_if_any(settings, key_dir)
+
+        if not key_id_dir:
+            key_id_dir = cls._create_new_key_id_dir(settings, key_dir)
+
+        return key_id_dir
 
     @classmethod
-    def is_valid_key_id(cls, key_id: str) -> bool:
-        from re import fullmatch
-        return bool(fullmatch(cls.KEY_ID_ALLOWLIST, key_id))
+    def lookup_key_id_dir_from_key_id(
+        cls,
+        settings: ComputeSettings,
+        key_id: str,
+    ) -> Path | None:
+        if not is_valid_compute_key_id(key_id):
+            raise ValueError('Malformed crypt4gh key_id: ' + key_id)
 
-    @classmethod
-    def index_path(cls, compute_keys_dir: Path, key_id: str) -> Path:
-        if not cls.is_valid_key_id(key_id):
-            raise ValueError('Invalid compute key id format')
-        return cls.index_dir(compute_keys_dir).joinpath(cls._index_shard(key_id), f'{key_id}.json')
-
-    @classmethod
-    def write_index_entry(cls, compute_keys_dir: Path, key_id: str, user_hash: str,
-                          expiration: str) -> None:
-        if not cls.is_valid_key_id(key_id):
-            return
-        index_path = cls.index_path(compute_keys_dir, key_id)
-        ensure_dirs(index_path.parent)
-
-        tmp_path = index_path.with_suffix(index_path.suffix + '.tmp')
-        payload = {'user_hash': user_hash, 'expiration': expiration}
-        with open(tmp_path, 'w') as index_file:
-            json.dump(payload, index_file)
-        tmp_path.replace(index_path)
-
-    @classmethod
-    def delete_index_entry(cls, compute_keys_dir: Path, key_id: str) -> None:
-        if not cls.is_valid_key_id(key_id):
-            return
-        index_path = cls.index_path(compute_keys_dir, key_id)
-        if index_path.exists():
-            index_path.unlink()
-
-    @classmethod
-    def _resolve_paths_from_metadata(cls,
-                                     compute_keys_dir: Path,
-                                     key_id: str,
-                                     user_hash: str,
-                                     expiration: str) -> Optional[tuple[Path, Path]]:
-        key_dir = compute_keys_dir.joinpath(user_hash, expiration, key_id)
-        if not key_dir.is_dir():
-            return None
-        public_key_path = key_dir.joinpath(f'{key_id}.pub')
-        private_key_path = key_dir.joinpath(f'{key_id}.priv')
-        if not (public_key_path.exists() and private_key_path.exists()):
-            return None
-
-        return public_key_path, private_key_path
-
-    @classmethod
-    def lookup_by_key_id(  # noqa: C901
-            cls, compute_keys_dir: Path,
-            key_id: str) -> Optional[tuple[str, str, bool, Path, Path]]:
-        if not cls.is_valid_key_id(key_id):
-            return None
-
-        index_path = cls.index_path(compute_keys_dir, key_id)
-        now = datetime.now(timezone.utc)
-
-        if index_path.exists():
-            try:
-                with open(index_path, 'r') as index_file:
-                    metadata = json.load(index_file)
-                user_hash = metadata['user_hash']
-                expiration = metadata['expiration']
-                resolved_paths = cls._resolve_paths_from_metadata(
-                    compute_keys_dir,
-                    key_id,
-                    user_hash,
-                    expiration,
-                )
-                if resolved_paths is not None:
-                    expiration_date = parse_iso_datetime(expiration)
-                    compute_public_key_path, compute_private_key_path = resolved_paths
-                    return (
-                        user_hash,
-                        expiration,
-                        expiration_date <= now,
-                        compute_public_key_path,
-                        compute_private_key_path,
-                    )
-            except (KeyError, ValueError, json.JSONDecodeError):
-                pass
-
-            cls.delete_index_entry(compute_keys_dir, key_id)
-
-        if not compute_keys_dir.exists():
-            return None
-
-        expired_key_data = None
-        for user_hash_dir in compute_keys_dir.iterdir():
-            if not user_hash_dir.is_dir() or user_hash_dir.name == 'index':
+        for user_hash_dir in settings.compute_keys_dir.iterdir():
+            if not user_hash_dir.is_dir() or user_hash_dir.name == INDEX_DIR_NAME:
                 continue
 
             for expiration_dir in user_hash_dir.iterdir():
@@ -244,72 +192,184 @@ class ComputeKeyFile(HashedStrFile):
                     continue
 
                 try:
-                    expiration_date = parse_iso_datetime(expiration_dir.name)
+                    ensure_datetime(expiration_dir.name)
                 except ValueError:
                     continue
 
-                resolved_paths = cls._resolve_paths_from_metadata(
-                    compute_keys_dir,
+                candidate_key_id_dir = settings.compute_keys_dir.joinpath(
+                    user_hash_dir.name,
+                    expiration_dir.name,
                     key_id,
-                    user_hash_dir.name,
-                    expiration_dir.name,
                 )
-                if resolved_paths is None:
-                    continue
+                if candidate_key_id_dir.exists():
+                    return candidate_key_id_dir
 
-                compute_public_key_path, compute_private_key_path = resolved_paths
-
-                cls.write_index_entry(
-                    compute_keys_dir,
-                    key_id,
-                    user_hash_dir.name,
-                    expiration_dir.name,
-                )
-
-                if expiration_date > now:
-                    return (
-                        user_hash_dir.name,
-                        expiration_dir.name,
-                        False,
-                        compute_public_key_path,
-                        compute_private_key_path,
-                    )
-
-                expired_key_data = (
-                    user_hash_dir.name,
-                    expiration_dir.name,
-                    True,
-                    compute_public_key_path,
-                    compute_private_key_path,
-                )
-
-        return expired_key_data
-
-
-def resolve_compute_keypair(
-    compute_keys_dir: Path,
-    user_keys_dir: Path,
-    key_id: str,
-) -> Optional[ResolvedComputeKeypair]:
-    key_data = ComputeKeyFile.lookup_by_key_id(compute_keys_dir, key_id)
-    if key_data is None:
         return None
 
-    user_hash, expiration, is_expired, compute_public_key_path, compute_private_key_path = key_data
+    @classmethod
+    def _get_last_expiring_key_id_dir_or_create_new(
+        cls,
+        settings: ComputeSettings,
+        key_dir: Path,
+    ) -> Path:
+        key_id_dir = None
+        if key_dir.exists():
+            key_id_dir = cls._get_last_non_expired_key_id_dir_if_any(settings, key_dir)
 
-    user_public_key_path = user_keys_dir.joinpath(user_hash)
-    if not user_public_key_path.exists():
-        ComputeKeyFile.delete_index_entry(compute_keys_dir, key_id)
+        if not key_id_dir:
+            key_id_dir = cls._create_new_key_id_dir(settings, key_dir)
+
+        return key_id_dir
+
+    @classmethod
+    def _create_new_key_id_dir(cls, settings: ComputeSettings, key_dir: Path) -> Path:
+        exp_date_str = to_iso(
+            datetime.now(timezone.utc)
+            + timedelta(seconds=settings.compute_key_expiration_delta_secs))
+        exp_id_dir = key_dir.joinpath(exp_date_str)
+        ensure_dirs(exp_id_dir)
+        key_id_dir = Path(tempfile.mkdtemp(prefix=settings.compute_key_id_prefix, dir=exp_id_dir))
+        return key_id_dir
+
+    @classmethod
+    def _get_last_non_expired_key_id_dir_if_any(
+        cls,
+        settings: ComputeSettings,
+        key_dir: Path,
+    ) -> Path | None:
+        key_id_dir = None
+        exp_dates = [ensure_datetime(_.name) for _ in key_dir.iterdir()]
+        exp_dates.sort()
+        if exp_dates:
+            last_exp_date = exp_dates[-1]
+            if not timestamp_is_expired_or_near_expiry(settings, last_exp_date):
+                last_exp_date_dir = key_dir.joinpath(to_iso(last_exp_date))
+                for key_id_dir in last_exp_date_dir.iterdir():
+                    break
+        return key_id_dir
+
+    def _get_attr_from_key_files_assume_same(self, attr_name: str) -> str:
+        public_attr_val: str = getattr(self.public_key_file, attr_name)
+        private_attr_val: str = getattr(self.private_key_file, attr_name)
+        assert public_attr_val == private_attr_val
+        assert public_attr_val is not None
+        return public_attr_val
+
+    @property
+    def key_id(self) -> str:
+        return self._get_attr_from_key_files_assume_same('key_id')
+
+    @property
+    def expiration_date(self) -> str:
+        return self._get_attr_from_key_files_assume_same('expiration_date')
+
+    @property
+    def user_hash(self) -> str:
+        return self._get_attr_from_key_files_assume_same('user_hash')
+
+    def read_from_storage(self):
+        self.public_key_file.read_from_storage()
+        self.private_key_file.read_from_storage()
+
+
+class ComputeKeyPairIndexFile(HashedFile[Mapping[str, str]]):
+    USER_PUBLIC_KEY_HASH_KEY = 'user_public_key_hash'
+    EXPIRATION_DATE_KEY = 'expiration_date'
+
+    @classmethod
+    def _to_bytes(cls, contents: Mapping[str, str]) -> bytes:
+        return json.dumps(contents).encode('utf8')
+
+    @property
+    def contents(self) -> Mapping[str, str]:
+        assert self._contents is not None
+        return json.loads(self._contents)
+
+    def __init__(
+        self,
+        settings: ComputeSettings,
+        compute_keypair: ComputeKeypairFiles,
+        write_to_storage: bool = False,
+    ):
+        index_path = self.index_path(settings.compute_keys_dir, compute_keypair.key_id)
+        ensure_dirs(index_path.parent)
+        contents = {
+            self.USER_PUBLIC_KEY_HASH_KEY: compute_keypair.user_hash,
+            self.EXPIRATION_DATE_KEY: compute_keypair.expiration_date,
+        }
+        super().__init__(
+            index_path.parent,
+            contents=contents,
+            filename=index_path.name,
+            write_to_storage=write_to_storage)
+
+    @classmethod
+    def index_dir(cls, compute_keys_dir: Path) -> Path:
+        return compute_keys_dir.joinpath(INDEX_DIR_NAME)
+
+    @classmethod
+    def _index_shard(cls, key_id: str) -> str:
+        key_id_suffix = key_id.split(':', 1)[1] if ':' in key_id else key_id
+        return key_id_suffix[:2] if len(key_id_suffix) >= 2 else (key_id_suffix or '__')
+
+    @classmethod
+    def index_path(cls, compute_keys_dir: Path, key_id: str) -> Path:
+        return cls.index_dir(compute_keys_dir).joinpath(cls._index_shard(key_id), f'{key_id}.json')
+
+    @classmethod
+    def delete_index_entry(cls, compute_keys_dir: Path, key_id: str) -> None:
+        if not is_valid_compute_key_id(key_id):
+            return
+
+        index_path = cls.index_path(compute_keys_dir, key_id)
+        if index_path.exists():
+            index_path.unlink()
+
+    @classmethod
+    def lookup_compute_keypair_by_id(
+        cls,
+        settings: ComputeSettings,
+        key_id: str,
+    ) -> ComputeKeypairFiles | None:
+        if not is_valid_compute_key_id(key_id):
+            return None
+
+        compute_keys_dir = settings.compute_keys_dir
+        index_path = cls.index_path(compute_keys_dir, key_id)
+
+        if index_path.exists():
+            try:
+                with open(index_path, 'r') as index_file:
+                    metadata = json.load(index_file)
+                user_hash = metadata[cls.USER_PUBLIC_KEY_HASH_KEY]
+                expiration_date = metadata[cls.EXPIRATION_DATE_KEY]
+                key_id_dir = settings.compute_keys_dir.joinpath(
+                    user_hash,
+                    to_iso(expiration_date),
+                    key_id,
+                )
+                return ComputeKeypairFiles(key_id_dir)
+
+            except (KeyError, ValueError, json.JSONDecodeError):
+                pass
+
+            cls.delete_index_entry(compute_keys_dir, key_id)
+        else:
+            if not compute_keys_dir.exists():
+                return None
+
+            key_id_dir = ComputeKeypairFiles.lookup_key_id_dir_from_key_id(settings, key_id)
+            if key_id_dir:
+                ComputeKeyPairIndexFile(
+                    settings, ComputeKeypairFiles(key_id_dir), write_to_storage=True)
+                return ComputeKeypairFiles(key_id_dir)
+
         return None
 
-    key_info = ComputeKeyInfo(
-        compute_keypair_id=key_id,
-        compute_keypair_expiration_date=expiration,
-    )
-    return ResolvedComputeKeypair(
-        key_info=key_info,
-        is_expired=is_expired,
-        compute_public_key_path=compute_public_key_path,
-        compute_private_key_path=compute_private_key_path,
-        user_public_key_path=user_public_key_path,
-    )
+
+def header_file_from_payload(settings: Settings, crypt4gh_header: str) -> HeaderFile:
+    try:
+        return HeaderFile(settings.headers_dir, crypt4gh_header, write_to_storage=True)
+    except (BinasciiError, ValueError) as e:
+        raise HTTPException(
+            status_code=422, detail='Malformed or undecryptable crypt4gh_header') from e

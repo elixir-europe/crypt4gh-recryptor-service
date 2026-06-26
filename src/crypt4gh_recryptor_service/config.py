@@ -10,6 +10,7 @@ from crypt4gh_recryptor_service.util import ensure_dirs
 from dotenv import dotenv_values
 from pydantic import BaseSettings
 from pydantic.env_settings import SettingsSourceCallable
+from typing_extensions import override
 import yaml
 
 VERSION = '0.2.0'
@@ -35,6 +36,7 @@ DEFAULT_COMPUTE_PRIVATE_KEY_FILE = 'compute_node_key.priv'
 DEFAULT_COMPUTE_PUBLIC_KEY_FILE = 'compute_node_key.pub'
 DEFAULT_COMPUTE_KEY_ID_PREFIX = 'cnk:'
 DEFAULT_COMPUTE_KEY_EXPIRATION_DELTA_SECS = int(timedelta(days=7).total_seconds())
+DEFAULT_COMPUTE_KEY_MIN_EXPIRATION_DELTA_REQ = int(timedelta(days=1).total_seconds())
 
 USER_KEYS_DIR = 'user_keys'
 COMPUTE_KEYS_DIR = 'compute_keys'
@@ -93,7 +95,7 @@ class Settings(BaseSettings):
             self._overridden_by_environ_vars[key] = getattr(self, key)
             setattr(self, key, val)
 
-    def update_environ_vars(self, environ_vars: _builtin_dict[str, Any]):
+    def update_environ_vars(self, environ_vars: dict[str, Any]):
         self._environ_vars.update(environ_vars)
 
     def dict(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
@@ -161,7 +163,8 @@ class UserSettings(Settings):
     def compute_public_key_path(self) -> Path:
         return Path(self.compute_keys_dir, DEFAULT_COMPUTE_PUBLIC_KEY_FILE)
 
-    class Config(BaseConfig):
+    @override
+    class Config(BaseConfig):  # type: ignore[override]
         pass
 
 
@@ -170,12 +173,14 @@ class ComputeSettings(Settings):
     port: int = DEFAULT_PORT_COMPUTE
     compute_key_id_prefix: str = DEFAULT_COMPUTE_KEY_ID_PREFIX
     compute_key_expiration_delta_secs: int = DEFAULT_COMPUTE_KEY_EXPIRATION_DELTA_SECS
+    compute_key_min_expiration_delta_req: int = DEFAULT_COMPUTE_KEY_MIN_EXPIRATION_DELTA_REQ
 
     @property
     def working_dir(self) -> Path:
         return _get_working_dir(ServerMode.COMPUTE)
 
-    class Config(BaseConfig):
+    @override
+    class Config(BaseConfig):  # type: ignore[override]
         pass
 
 

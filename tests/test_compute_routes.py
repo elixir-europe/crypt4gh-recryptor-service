@@ -14,7 +14,7 @@ from crypt4gh_recryptor_service.config import (ComputeSettings,
                                                ServerMode,
                                                setup_files)
 import crypt4gh_recryptor_service.crypt as crypt_module
-from crypt4gh_recryptor_service.storage import ComputeKeyFile, HeaderFile
+from crypt4gh_recryptor_service.storage import ComputeKeyPairIndexFile, HeaderFile
 from crypt4gh_recryptor_service.util import ensure_dirs
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -138,8 +138,8 @@ def test_get_compute_key_info_persists_key_id_index(configured_client, user_publ
 
     assert index_path.exists()
     assert json.loads(index_path.read_text()) == {
-        'user_hash': user_hash,
-        'expiration': key_info['crypt4gh_compute_keypair_expiration_date'],
+        'user_public_key_hash': user_hash,
+        'expiration_date': key_info['crypt4gh_compute_keypair_expiration_date'],
     }
 
 
@@ -230,7 +230,7 @@ def test_delete_index_entry_ignores_invalid_key_id_path_traversal(configured_cli
     victim_file = settings.compute_keys_dir.joinpath('escape.json')
     victim_file.write_text('{}')
 
-    ComputeKeyFile.delete_index_entry(settings.compute_keys_dir, 'cnk:../../escape')
+    ComputeKeyPairIndexFile.delete_index_entry(settings.compute_keys_dir, 'cnk:../../escape')
 
     assert victim_file.exists()
 

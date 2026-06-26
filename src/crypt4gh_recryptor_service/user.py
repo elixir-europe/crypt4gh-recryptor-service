@@ -5,7 +5,7 @@ from crypt4gh_recryptor_service.config import get_user_settings, UserSettings
 from crypt4gh_recryptor_service.crypt import crypt4gh_recrypt_header
 from crypt4gh_recryptor_service.exchange import fetch_compute_key_info
 from crypt4gh_recryptor_service.models import UserRecryptParams, UserRecryptResponse
-from crypt4gh_recryptor_service.storage import HashedStrFile, HeaderFile
+from crypt4gh_recryptor_service.storage import HashedStrFile, header_file_from_payload
 from fastapi import Depends, Request
 
 
@@ -19,13 +19,10 @@ async def recrypt_header(params: UserRecryptParams,
                          settings: Annotated[UserSettings, Depends(get_user_settings)],
                          request: Request) -> UserRecryptResponse:
 
+    in_header_file = header_file_from_payload(settings, params.header)
+
     key_info = await fetch_compute_key_info(request, settings)
 
-    in_header_file = HeaderFile(
-        settings.headers_dir,
-        params.header,
-        write_to_storage=True,
-    )
     compute_public_key_file = HashedStrFile(
         settings.compute_keys_dir,
         key_info.compute_public_key,
@@ -39,7 +36,7 @@ async def recrypt_header(params: UserRecryptParams,
         verbose=settings.dev_mode)
 
     return UserRecryptResponse(
-        header=out_header_file.contents,
-        compute_keypair_id=key_info.compute_keypair_id,
-        compute_keypair_expiration_date=key_info.compute_keypair_expiration_date,
+        header=out_header_file.contents,  # type: ignore
+        compute_keypair_id=key_info.compute_keypair_id,  # type: ignore
+        compute_keypair_expiration_date=key_info.compute_keypair_expiration_date,  # type: ignore
     )
