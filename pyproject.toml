@@ -10,13 +10,14 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.10,<4.0"
 dependencies = [
-    "fastapi<1",
-    "uvicorn[standard]>=0.22.0,<0.23.0",
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.22.0",
     "crypt4gh-recryptor",
-    "typer>=0.9.0,<0.10.0",
-    "httpx>=0.24.1,<0.25.0",
-    "pydantic<2",
-    "truststore>=0.10.4,<0.11.0",
+    "typer>=0.9.0",
+    "httpx>=0.27.0",
+    "pydantic>=2",
+    "pydantic-settings>=2",
+    "truststore>=0.10.4",
 ]
 
 [project.scripts]
@@ -24,13 +25,13 @@ crypt4gh-recryptor-service = "crypt4gh_recryptor_service.main:app"
 
 [dependency-groups]
 dev = [
-    "flake8>=6.0.0,<7.0.0",
-    "isort>=5.12.0,<6.0.0",
-    "flake8-quotes>=3.3.2,<4.0.0",
-    "toml>=0.10.2,<0.11.0",
-    "yapf>=0.40.1,<0.41.0",
-    "pre-commit>=3.3.3,<4.0.0",
-    "pytest>=8.0.0,<9.0.0",
+    "flake8>=6.0.0",
+    "isort>=5.12.0",
+    "flake8-quotes>=3.3.2",
+    "toml>=0.10.2",
+    "yapf>=0.40.1",
+    "pre-commit>=3.3.3",
+    "pytest>=8.0.0",
 ]
 
 [tool.uv.sources]

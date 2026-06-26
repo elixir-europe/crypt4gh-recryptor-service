@@ -4,13 +4,12 @@ from enum import Enum
 from functools import lru_cache
 import os
 from pathlib import Path
-from typing import Any, Callable, TypeAlias, Union
+from typing import Any, Callable, Union
 
 from crypt4gh_recryptor_service.util import ensure_dirs
 from dotenv import dotenv_values
-from pydantic import BaseSettings
-from pydantic.env_settings import SettingsSourceCallable
-from typing_extensions import override
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings.sources import PydanticBaseSettingsSource
 import yaml
 
 VERSION = '0.2.0'
@@ -43,38 +42,25 @@ COMPUTE_KEYS_DIR = 'compute_keys'
 HEADERS_DIR = 'headers'
 CERT_DIR = 'certs'
 
-_builtin_dict: TypeAlias = dict
-
-
 class ServerMode(str, Enum):
     USER = 'user'
     COMPUTE = 'compute'
 
 
-C4ghSettingsSourceCallable = Callable[['Settings'], dict[str, Any]]
-
-
-class BaseConfig:
-    env_file: str = ENV_FILE
-    env_prefix: str = ENV_PREFIX
-    use_enum_values: bool = True
-    underscore_attrs_are_private: bool = True
-    validate_assignment: bool = True
-
-    @classmethod
-    def customise_sources(
-        cls,
-        init_settings: SettingsSourceCallable,
-        env_settings: SettingsSourceCallable,
-        file_secret_settings: SettingsSourceCallable,
-    ) -> tuple[C4ghSettingsSourceCallable, ...]:
-        store_env_settings = get_store_env_settings_callable(env_settings)
-        return yml_config_setting, store_env_settings,
+C4ghSettingsSourceCallable = Callable[[], dict[str, Any]]
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=ENV_FILE,
+        env_prefix=ENV_PREFIX,
+        use_enum_values=True,
+        validate_assignment=True,
+    )
+
     _environ_vars: dict[str, Any] = {}
     _overridden_by_environ_vars: dict[str, Any] = {}
+    _pending_environ_vars: dict[str, Any] = {}
 
     host: str = DEFAULT_HOST
     port: int
@@ -88,6 +74,8 @@ class Settings(BaseSettings):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._environ_vars = dict(self._pending_environ_vars)
+        self._overridden_by_environ_vars = {}
         self._override_by_environ_vars()
 
     def _override_by_environ_vars(self):
@@ -98,12 +86,29 @@ class Settings(BaseSettings):
     def update_environ_vars(self, environ_vars: dict[str, Any]):
         self._environ_vars.update(environ_vars)
 
-    def dict(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
-        super_dict = super().dict(*args, **kwargs)
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        super_dict = super().model_dump(*args, **kwargs)
         for key, val in self._overridden_by_environ_vars.items():
             if key in super_dict:
                 super_dict[key] = val
         return super_dict
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[C4ghSettingsSourceCallable, ...]:
+        yml_settings = get_yml_config_settings_callable(settings_cls)
+        store_env_settings = get_store_env_settings_callable(
+            env_settings,
+            dotenv_settings,
+            settings_cls,
+        )
+        return yml_settings, store_env_settings
 
     @property
     @abc.abstractmethod
@@ -163,10 +168,6 @@ class UserSettings(Settings):
     def compute_public_key_path(self) -> Path:
         return Path(self.compute_keys_dir, DEFAULT_COMPUTE_PUBLIC_KEY_FILE)
 
-    @override
-    class Config(BaseConfig):  # type: ignore[override]
-        pass
-
 
 class ComputeSettings(Settings):
     server_mode: ServerMode = ServerMode.COMPUTE
@@ -178,10 +179,6 @@ class ComputeSettings(Settings):
     @property
     def working_dir(self) -> Path:
         return _get_working_dir(ServerMode.COMPUTE)
-
-    @override
-    class Config(BaseConfig):  # type: ignore[override]
-        pass
 
 
 @lru_cache
@@ -202,21 +199,37 @@ def get_settings(server_mode: ServerMode) -> Union[UserSettings, ComputeSettings
 
 
 def get_store_env_settings_callable(
-        env_settings_func: SettingsSourceCallable) -> C4ghSettingsSourceCallable:
-    def store_env_settings(settings: Settings) -> dict[str, Any]:
-        env_settings = env_settings_func(settings)
-        settings.update_environ_vars(env_settings)
+        env_settings_func: C4ghSettingsSourceCallable,
+        dotenv_settings_func: C4ghSettingsSourceCallable,
+        settings_cls: type[Settings],
+) -> C4ghSettingsSourceCallable:
+    def store_env_settings() -> dict[str, Any]:
+        dotenv_settings = dotenv_settings_func()
+        env_settings = env_settings_func()
+
+        combined_settings = dict(dotenv_settings)
+        combined_settings.update(env_settings)
+        settings_cls._pending_environ_vars = combined_settings
         return {}
 
     return store_env_settings
 
 
-def yml_config_setting(settings: Settings) -> dict[str, Any]:
-    with open(settings.yml_config_file_path) as f:
-        ret = yaml.safe_load(f)
-        if ret:
-            return ret
-        return {}
+def get_yml_config_settings_callable(settings_cls: type[Settings]) -> C4ghSettingsSourceCallable:
+    def yml_config_setting() -> dict[str, Any]:
+        server_mode = settings_cls.model_fields['server_mode'].default
+        yml_config_file_path = _get_yml_config_file_path(_get_working_dir(server_mode))
+
+        if not os.path.exists(yml_config_file_path):
+            return {}
+
+        with open(yml_config_file_path) as f:
+            ret = yaml.safe_load(f)
+            if ret:
+                return ret
+            return {}
+
+    return yml_config_setting
 
 
 def _get_working_dir(server_mode: ServerMode) -> Path:
@@ -246,7 +259,7 @@ def setup_files(server_mode: ServerMode):
             f.write('')
         yml_config_file_path.chmod(mode=0o600)
 
-    settings = get_settings(server_mode).dict()
+    settings = get_settings(server_mode).model_dump()
 
     with open(yml_config_file_path, 'w') as f:
         yaml.safe_dump(settings, f)

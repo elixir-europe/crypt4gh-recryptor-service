@@ -3,12 +3,11 @@ from pathlib import Path
 from typing import Union
 
 from crypt4gh_recryptor_service.validators import to_iso
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ApiModel(BaseModel):
-    class Config:
-        allow_population_by_field_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class ComputeKeyInfo(ApiModel):
@@ -16,7 +15,10 @@ class ComputeKeyInfo(ApiModel):
     compute_keypair_expiration_date: Union[datetime, str] = Field(
         ..., alias='crypt4gh_compute_keypair_expiration_date')
 
-    _to_iso = validator('compute_keypair_expiration_date', allow_reuse=True)(to_iso)
+    @field_validator('compute_keypair_expiration_date')
+    @classmethod
+    def _to_iso(cls, v):
+        return to_iso(v)
 
 
 class UserRecryptParams(ApiModel):
