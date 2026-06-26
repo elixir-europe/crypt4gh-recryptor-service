@@ -19,19 +19,16 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
-          curl -sSL https://install.python-poetry.org | python3 -
-          $HOME/.local/bin/poetry install
+          python -m pip install uv
+          uv sync --group dev --frozen
       - name: Check input line sorting with isort
         run: |
-          source $(poetry env info --path)/bin/activate
-          isort -c .
+          uv run isort -c .
 
       - name: Check standarized formatting with yapf
         run: |
-          source $(poetry env info --path)/bin/activate
-          yapf -r --diff .
+          uv run yapf -r --diff .
 
       - name: Lint with flake8
         run: |
-          source $(poetry env info --path)/bin/activate
-          flake8 . --count --show-source --statistics
+          uv run flake8 . --count --show-source --statistics

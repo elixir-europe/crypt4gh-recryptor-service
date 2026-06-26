@@ -2,24 +2,21 @@
 
 ## Development setup
 
-- Install Poetry:
-  - `curl -sSL https://install.python-poetry.org | python3 -`
-
-- Configure locally installed virtualenv (under `.venv`):
-  - `poetry config virtualenvs.in-project true`
+- Install uv:
+  - `curl -LsSf https://astral.sh/uv/install.sh | sh`
 
 - Install dependencies:
-  - `poetry install --with dev --with docs`
+  - `uv sync --group dev`
 
 - Update all dependencies:
-  - `poetry update`
+  - `uv lock --upgrade`
 
 - Update single dependency, e.g.:
-  - `poetry update prefect`
+  - `uv lock --upgrade-package prefect`
 
-- If a dependency is not updated to the latest version available on Pypi, you might need to clear
-  the pip cache of poetry:
-  - `poetry cache clear pypi -all`
+- If a dependency is not updated to the latest version available, you might need to clear the
+  uv cache:
+  - `uv cache clean`
 
 ### For mypy support in PyCharm
 
@@ -37,7 +34,7 @@ is opinionated against the default black setup. The yapf config is not fully
 defined. 
 
 - To install git hooks that automagically format and lint before every commit:
-  - `pre-commit install`
+  - `uv run pre-commit install`
 
 - In PyCharm -> File Watchers:
   - Click arrow icon pointing down and to the left
