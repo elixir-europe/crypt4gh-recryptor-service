@@ -36,7 +36,7 @@ async def recrypt_header(params: UserRecryptParams,
         verbose=settings.dev_mode)
 
     return UserRecryptResponse(
-        header=out_header_file.contents,  # type: ignore
+        header=out_header_file.content,  # type: ignore
         compute_keypair_id=key_info.compute_keypair_id,  # type: ignore
         compute_keypair_expiration_date=key_info.compute_keypair_expiration_date,  # type: ignore
     )

@@ -43,93 +43,93 @@ def timestamp_is_expired_or_near_expiry(
 class HashedFile(Generic[T]):
     def __init__(self,
                  dir: Path,
-                 contents: Optional[T] = None,
+                 content: Optional[T] = None,
                  filename: Optional[str] = None,
                  write_to_storage: bool = False):
         self.dir: Path = dir
-        self._contents: Optional[bytes] = self._to_bytes(contents) if contents else None
+        self._content: Optional[bytes] = self._to_bytes(content) if content else None
 
         self._rename_to_hash = False if filename else True
 
         if not filename:
-            filename = self._content_sha256() if self._contents else tempfile.mktemp(dir=self.dir)
+            filename = self._content_sha256() if self._content else tempfile.mktemp(dir=self.dir)
         self._filename = filename
 
         if write_to_storage:
             self.write_to_storage()
 
     @classmethod
-    def _to_bytes(cls, contents: T) -> bytes:
-        assert isinstance(contents, bytes)
-        return contents
+    def _to_bytes(cls, content: T) -> bytes:
+        assert isinstance(content, bytes)
+        return content
 
     @property
     @abstractmethod
-    def contents(self) -> T:
+    def content(self) -> T:
         ...
 
     def _content_sha256(self) -> str:
-        assert self._contents is not None
-        return sha256(self._contents).hexdigest()
+        assert self._content is not None
+        return sha256(self._content).hexdigest()
 
     @property
     def path(self) -> Path:
         return self.dir.joinpath(self._filename)
 
     def write_to_storage(self):
-        assert self._contents is not None
+        assert self._content is not None
         with open(self.path, 'wb') as hashed_file:
-            hashed_file.write(self._contents)
+            hashed_file.write(self._content)
         self.path.chmod(mode=0o600)
 
     def read_from_storage(self):
         with open(self.path, 'rb') as hashed_file:
-            self._contents = hashed_file.read()
+            self._content = hashed_file.read()
             if self._rename_to_hash and self._filename != self._content_sha256():
                 self.path.rename(self.dir.joinpath(self._content_sha256()))
 
 
 class HashedBytesFile(HashedFile[bytes]):
     @property
-    def contents(self) -> bytes:
-        assert self._contents is not None
-        return self._contents
+    def content(self) -> bytes:
+        assert self._content is not None
+        return self._content
 
 
 class HashedStrFile(HashedFile[str]):
     @classmethod
-    def _to_bytes(cls, contents: str) -> bytes:
-        return contents.encode('utf8')
+    def _to_bytes(cls, content: str) -> bytes:
+        return content.encode('utf8')
 
     @property
-    def contents(self) -> str:
-        assert self._contents is not None
-        return self._contents.decode('utf8')
+    def content(self) -> str:
+        assert self._content is not None
+        return self._content.decode('utf8')
 
 
 class HeaderFile(HashedFile[str]):
     @classmethod
-    def _to_bytes(cls, contents: str) -> bytes:
+    def _to_bytes(cls, content: str) -> bytes:
         try:
-            return b64decode(contents)
+            return b64decode(content)
         except ValueError as e:
             raise ValueError('Malformed or undecryptable crypt4gh_header') from e
 
     @property
-    def contents(self) -> str:
-        assert self._contents is not None
-        return b64encode(self._contents).decode('ascii')
+    def content(self) -> str:
+        assert self._content is not None
+        return b64encode(self._content).decode('ascii')
 
 
 class ComputeKeyFile(HashedStrFile):
     def __init__(self,
                  key_id_dir: Path,
-                 contents: Optional[str] = None,
+                 content: Optional[str] = None,
                  public: bool = True,
                  write_to_storage: bool = False):
 
         filename = key_id_dir.name + ('.pub' if public else '.priv')
-        super().__init__(key_id_dir, contents, filename=filename, write_to_storage=write_to_storage)
+        super().__init__(key_id_dir, content, filename=filename, write_to_storage=write_to_storage)
 
     @property
     def key_id(self) -> str:
@@ -277,13 +277,13 @@ class ComputeKeyPairIndexFile(HashedFile[Mapping[str, str]]):
     EXPIRATION_DATE_KEY = 'expiration_date'
 
     @classmethod
-    def _to_bytes(cls, contents: Mapping[str, str]) -> bytes:
-        return json.dumps(contents).encode('utf8')
+    def _to_bytes(cls, content: Mapping[str, str]) -> bytes:
+        return json.dumps(content).encode('utf8')
 
     @property
-    def contents(self) -> Mapping[str, str]:
-        assert self._contents is not None
-        return json.loads(self._contents)
+    def content(self) -> Mapping[str, str]:
+        assert self._content is not None
+        return json.loads(self._content)
 
     def __init__(
         self,
@@ -293,13 +293,13 @@ class ComputeKeyPairIndexFile(HashedFile[Mapping[str, str]]):
     ):
         index_path = self.index_path(settings.compute_keys_dir, compute_keypair.key_id)
         ensure_dirs(index_path.parent)
-        contents = {
+        content = {
             self.USER_PUBLIC_KEY_HASH_KEY: compute_keypair.user_hash,
             self.EXPIRATION_DATE_KEY: compute_keypair.expiration_date,
         }
         super().__init__(
             index_path.parent,
-            contents=contents,
+            content=content,
             filename=index_path.name,
             write_to_storage=write_to_storage)
 

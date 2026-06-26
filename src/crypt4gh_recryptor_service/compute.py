@@ -63,7 +63,7 @@ async def get_compute_key_info(
         ComputeKeyPairIndexFile(settings, compute_keypair, write_to_storage=True)
 
         return ComputeKeyInfoResponse(  # type: ignore
-            compute_public_key=compute_keypair.public_key_file.contents,  # type: ignore
+            compute_public_key=compute_keypair.public_key_file.content,  # type: ignore
             compute_keypair_id=compute_keypair.key_id,  # type: ignore
             compute_keypair_expiration_date=compute_keypair.expiration_date,  # type: ignore
         )
@@ -99,7 +99,7 @@ async def recrypt_header_to_job_key(
         verbose=settings.dev_mode)
 
     return ComputeRecryptHeaderToJobKeyResponse(  # type: ignore
-        header=out_header_file.contents,  # type: ignore
+        header=out_header_file.content,  # type: ignore
         compute_public_key=compute_keypair.public_key_file.path.read_text(),  # type: ignore
         compute_keypair_id=compute_keypair.key_id,  # type: ignore
         compute_keypair_expiration_date=compute_keypair.expiration_date,  # type: ignore
@@ -123,7 +123,7 @@ async def recrypt_header_to_user_key(
         verbose=settings.dev_mode)
 
     return ComputeRecryptHeaderToUserKeyResponse(
-        header=out_header_file.contents,  # type: ignore
+        header=out_header_file.content,  # type: ignore
         compute_keypair_id=compute_keypair.key_id,  # type: ignore
         compute_keypair_expiration_date=compute_keypair.expiration_date,  # type: ignore
     )

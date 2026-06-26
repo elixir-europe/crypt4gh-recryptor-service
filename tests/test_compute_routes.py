@@ -81,7 +81,7 @@ def fake_recrypt_header(monkeypatch):
             pass
         if verbose:
             pass
-        return SimpleNamespace(contents=RECRYPTED_HEADER)
+        return SimpleNamespace(content=RECRYPTED_HEADER)
 
     monkeypatch.setattr(compute_module, 'crypt4gh_recrypt_header', _fake_recrypt, raising=False)
 
