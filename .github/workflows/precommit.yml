@@ -3,32 +3,34 @@ name: Python package
 on: [push, pull_request]
 
 jobs:
-  build:
-
+  run-precommit:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-#        python-version: ["3.8", "3.9", "3.10"]
         python-version: ["3.10"]
 
     steps:
       - uses: actions/checkout@v3
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v3
         with:
           python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
       - name: Install dependencies
         run: |
-          python -m pip install uv
-          uv sync --group dev --frozen
-      - name: Check input line sorting with isort
-        run: |
-          uv run isort -c .
+          uv sync --all-groups
 
-      - name: Check standarized formatting with yapf
+      - name: Install pre-commit
         run: |
-          uv run yapf -r --diff .
+          pip install pre-commit
 
-      - name: Lint with flake8
+      - name: Run pre-commit autoupdate
+        run: pre-commit autoupdate
+
+      - name: Run pre-commit hooks with hook-stage "manual" (=checks only)
         run: |
-          uv run flake8 . --count --show-source --statistics
+          pre-commit run --hook-stage manual --all-files
