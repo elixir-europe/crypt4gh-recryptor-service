@@ -5,9 +5,11 @@ from functools import lru_cache
 import os
 from pathlib import Path
 from typing import Any, Callable, Union
+from urllib.parse import urlsplit
 
 from crypt4gh_recryptor_service.util import ensure_dirs
 from dotenv import dotenv_values
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.sources import PydanticBaseSettingsSource
 import yaml
@@ -41,6 +43,23 @@ USER_KEYS_DIR = 'user_keys'
 COMPUTE_KEYS_DIR = 'compute_keys'
 HEADERS_DIR = 'headers'
 CERT_DIR = 'certs'
+
+
+def validate_allowed_origins(origins: list[str]) -> list[str]:
+    """Validate exact browser origins accepted by the user-mode service."""
+    for origin in origins:
+        parsed = urlsplit(origin)
+        try:
+            parsed.port
+        except ValueError as exc:
+            raise ValueError(f'Invalid allowed origin: {origin!r}') from exc
+
+        if (origin != origin.strip() or '*' in origin or parsed.scheme not in {'http', 'https'} or
+                parsed.hostname is None or parsed.username is not None or
+                parsed.password is not None or parsed.path or parsed.query or parsed.fragment):
+            raise ValueError(
+                f'Invalid allowed origin {origin!r}; use an exact http(s) origin without a path')
+    return origins
 
 
 class ServerMode(str, Enum):
@@ -152,6 +171,12 @@ class UserSettings(Settings):
     compute_port: int = DEFAULT_PORT_COMPUTE
     user_private_key: str = DEFAULT_USER_PRIVATE_KEY_FILE
     user_public_key: str = DEFAULT_USER_PUBLIC_KEY_FILE
+    allowed_origins: list[str] = Field(default_factory=list)
+
+    @field_validator('allowed_origins')
+    @classmethod
+    def _validate_allowed_origins(cls, origins: list[str]) -> list[str]:
+        return validate_allowed_origins(origins)
 
     @property
     def working_dir(self) -> Path:

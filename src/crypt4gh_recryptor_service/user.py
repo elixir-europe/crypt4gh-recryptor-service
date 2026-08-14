@@ -1,12 +1,14 @@
 from typing import Annotated
 
-from crypt4gh_recryptor_service.app import app, common_info
+from crypt4gh_recryptor_service.app import app, common_info, configure_user_cors
 from crypt4gh_recryptor_service.config import get_user_settings, UserSettings
 from crypt4gh_recryptor_service.crypt import crypt4gh_recrypt_header
 from crypt4gh_recryptor_service.exchange import fetch_compute_key_info
 from crypt4gh_recryptor_service.models import UserRecryptParams, UserRecryptResponse
 from crypt4gh_recryptor_service.storage import HashedStrFile, header_file_from_payload
 from fastapi import Depends, Request
+
+configure_user_cors(app, get_user_settings().allowed_origins)
 
 
 @app.get('/info')
