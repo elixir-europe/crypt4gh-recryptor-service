@@ -1,7 +1,8 @@
+from collections.abc import Sequence
 from contextlib import asynccontextmanager
 import ssl
 
-from crypt4gh_recryptor_service.config import Settings, VERSION
+from crypt4gh_recryptor_service.config import Settings, validate_allowed_origins, VERSION
 from fastapi import FastAPI
 import httpx
 from starlette.middleware.cors import CORSMiddleware
@@ -21,14 +22,21 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=['*'],
-    allow_credentials=True,
-    allow_methods=['POST', 'GET'],
-    allow_headers=['*'],
-    max_age=3600,
-)
+
+def configure_user_cors(fastapi_app: FastAPI, allowed_origins: Sequence[str]) -> None:
+    """Allow browser access to user mode only from explicitly configured origins."""
+    origins = validate_allowed_origins(list(allowed_origins))
+    if not origins:
+        return
+
+    fastapi_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=False,
+        allow_methods=['POST', 'GET'],
+        allow_headers=['Content-Type'],
+        max_age=3600,
+    )
 
 
 def common_info(settings: Settings) -> dict:

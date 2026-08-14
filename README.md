@@ -12,6 +12,18 @@ Install crypt4gh-recryptor-service
 
 ## Setup and run - User mode
 
+Before starting user mode, configure the exact Galaxy origin in
+`c4gh_recryptor_user/c4gh_config.yml`:
+
+```yaml
+allowed_origins:
+  - https://galaxy.example.org
+```
+
+Origins must include the scheme and optional port, with no trailing slash or path. Wildcards are
+rejected. The default is an empty list, which disables cross-origin browser access until an origin is
+configured.
+
 `crypt4gh-recryptor-service user`
 
 ## Setup and run - Compute mode
@@ -53,3 +65,12 @@ Compute mode exposes three header-focused routes:
 ### Header-only contract
 
 These routes are header-only in this slice: the service receives and returns Crypt4GH header bytes (base64-encoded) and key metadata; no full encrypted body payload is sent through these API endpoints.
+
+## Browser access and CORS
+
+Only user mode is browser-facing, and it enables CORS only for the exact origins listed in
+`allowed_origins`. Cookies and other browser credentials are not accepted, and the only non-safelisted
+request header allowed is `Content-Type`.
+
+Compute mode never installs CORS middleware. CORS is a browser boundary, not authentication; Service B
+must still be reachable only through an authenticated and authorized compute-side channel.
